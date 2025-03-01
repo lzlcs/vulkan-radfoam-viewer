@@ -6,7 +6,8 @@ int main()
 {
     VulkanInitializer vkInitializer;
     if (!InitializeWindow({1280, 720}))
-        return -1; // 来个你讨厌的返回值
+        return -1;
+        
     while (!glfwWindowShouldClose(pWindow))
     {
 

@@ -88,10 +88,13 @@ bool InitializeWindow(VkExtent2D size, bool fullScreen = false, bool isResizable
         return false;
     }
 
+    if (initializer.createSwapChain(limitFrameRate))
+        return false;
+
     return true;
 }
 void TerminateWindow()
 {
-    /*待Ch1-4填充*/
+    VulkanInitializer::getInitializer().deviceWaitIdle();
     glfwTerminate();
 }

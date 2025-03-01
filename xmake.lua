@@ -1,3 +1,4 @@
+add_rules("mode.debug", "mode.release")
 
 target("radfoam-vulkan-viewer")
     set_languages("c++20")
