@@ -1,12 +1,14 @@
-#include "src/vulkan_initializer.h"
+#include "src/vulkan_context.h"
 #include "src/GLFWGeneral.h"
+#include "src/arguments.hpp"
 
 
-int main()
+int main(int argc, char *argv[])
 {
-    VulkanInitializer vkInitializer;
-    if (!InitializeWindow({1280, 720}))
-        return -1;
+    auto args = argparse::parse<RadFoamVulkanArgs>(argc, argv);
+    auto pArgs = std::make_shared<RadFoamVulkanArgs>(args);
+
+    initializeWindow(pArgs);
         
     while (!glfwWindowShouldClose(pWindow))
     {
@@ -16,6 +18,7 @@ int main()
         glfwPollEvents();
         TitleFps();
     }
-    TerminateWindow();
+
+    terminateWindow();
     return 0;
 }

@@ -1,6 +1,8 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
-#include "vulkan_initializer.h"
+#include "vulkan_context.h"
+#include "arguments.hpp"
+#include "radfoam.hpp"
 #include <iostream>
 #include <sstream>
 #include <format>
@@ -29,72 +31,82 @@ void TitleFps()
     }
 }
 
-bool InitializeWindow(VkExtent2D size, bool fullScreen = false, bool isResizable = true, bool limitFrameRate = true)
+VkResult createGLFW(std::shared_ptr<RadFoamVulkanArgs> pArgs)
 {
-    auto &initializer = VulkanInitializer::getInitializer();
-
     // Initialize Window
     if (!glfwInit())
     {
-        std::cout << std::format("[ InitializeWindow ] ERROR\nFailed to initialize GLFW!\n");
-        return false;
+        glfwTerminate();
+        return VK_ERROR_INITIALIZATION_FAILED;
     }
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, isResizable);
+    glfwWindowHint(GLFW_RESIZABLE, pArgs->isResizable);
     pMonitor = glfwGetPrimaryMonitor();
     const GLFWvidmode *pMode = glfwGetVideoMode(pMonitor);
-    pWindow = fullScreen ? glfwCreateWindow(pMode->width, pMode->height, windowTitle, pMonitor, nullptr) : glfwCreateWindow(size.width, size.height, windowTitle, nullptr, nullptr);
+
+    pWindow = pArgs->fullScreen ? glfwCreateWindow(pMode->width, pMode->height, windowTitle, pMonitor, nullptr)
+                                : glfwCreateWindow(pArgs->windowWidth, pArgs->windowHeight, windowTitle, nullptr, nullptr);
     if (!pWindow)
     {
-        std::cout << std::format("[ InitializeWindow ]\nFailed to create a glfw window!\n");
         glfwTerminate();
-        return false;
+        return VK_ERROR_INITIALIZATION_FAILED;
     }
-
-    // Enable Extensions
-    uint32_t extensionCount = 0;
-    const char **extensionNames = glfwGetRequiredInstanceExtensions(&extensionCount);
-
-    if (!extensionNames)
-    {
-        std::cout << std::format("[ InitializeWindow ]\nVulkan is not available on this machine!\n");
-        glfwTerminate();
-        return false;
-    }
-    for (size_t i = 0; i < extensionCount; i++)
-        initializer.addInstanceExtension(extensionNames[i]);
-
-    initializer.addDeviceExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
-    initializer.getLatestApiVersion();
-    if (initializer.createInstance())
-        return false;
-
-    // Create SurfaceKHR
-    VkSurfaceKHR surface = VK_NULL_HANDLE;
-    VkResult result = glfwCreateWindowSurface(initializer.getInstance(), pWindow, nullptr, &surface);
-    if (result != VK_SUCCESS)
-    {
-        std::cout << std::format("[ InitializeWindow ] ERROR\nFailed to create a window surface!\nError code: {}\n", int32_t(result));
-        glfwTerminate();
-        return false;
-    }
-    initializer.setSurface(surface);
-
-    // Create Device
-    if (initializer.getPhysicalDevices() != VK_SUCCESS ||
-        initializer.pickPhysicalDevice() != VK_SUCCESS ||
-        initializer.createDevice() != VK_SUCCESS)
-    {
-        return false;
-    }
-
-    if (initializer.createSwapChain(limitFrameRate))
-        return false;
-
-    return true;
+    return VK_SUCCESS;
 }
-void TerminateWindow()
+
+VkResult getGLFWInstanceExtensions(uint32_t *extensionCount, const char ***extensionNames)
 {
-    VulkanInitializer::getInitializer().deviceWaitIdle();
+    *extensionNames = glfwGetRequiredInstanceExtensions(extensionCount);
+    if (!*extensionNames)
+    {
+        glfwTerminate();
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+    return VK_SUCCESS;
+}
+
+void initializeWindow(std::shared_ptr<RadFoamVulkanArgs> pArgs)
+{
+    
+    ERR_GUARD_VULKAN(createGLFW(pArgs));
+    auto &context = VulkanContext::getContext();
+    context.setArgs(pArgs);
+
+    // Add Instance Layers, Instance Extensions, Device Extensions
+    uint32_t extensionCount = 0;
+    const char **extensionNames = nullptr;
+    ERR_GUARD_VULKAN(getGLFWInstanceExtensions(&extensionCount, &extensionNames));
+    for (size_t i = 0; i < extensionCount; i++)
+        context.addInstanceExtension(extensionNames[i]);
+    if (pArgs->validation)
+    {
+        context.addInstanceLayer("VK_LAYER_KHRONOS_validation");
+        context.addInstanceExtension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    }
+    context.addDeviceExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+
+    // Initialization
+    context.createInstance();
+
+    if (pArgs->validation)
+        context.createDebugMessenger();
+
+    context.getPhysicalDevices();
+    context.createLogicalDevice();
+    context.createCommandPool();
+    context.createVMAAllocator();
+    context.setModel(std::make_shared<RadFoam>(pArgs));
+    context.getModel()->loadRadFoam();
+    
+    VkSurfaceKHR surface = VK_NULL_HANDLE;
+    ERR_GUARD_VULKAN(glfwCreateWindowSurface(context.getInstance(), pWindow, nullptr, &surface));
+    context.setSurface(surface);
+
+    context.createSwapChain();
+}
+
+void terminateWindow()
+{
+    ERR_GUARD_VULKAN(vkDeviceWaitIdle(VulkanContext::getContext().getDevice()));
     glfwTerminate();
 }

@@ -9,7 +9,7 @@ target("radfoam-vulkan-viewer")
     --     os.run("src\\compile.bat")
     -- end)
 
-    add_includedirs("./lib/glm/glm")
+    add_includedirs("./lib")
 
     add_includedirs("C:/Users/Lozical/scoop/apps/glfw/current/include")
     add_linkdirs("C:/Users/Lozical/scoop/apps/glfw/current/lib-mingw-w64") 
