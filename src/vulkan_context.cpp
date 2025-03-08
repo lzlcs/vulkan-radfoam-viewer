@@ -146,6 +146,23 @@ void VulkanContext::createCommandPool()
     ERR_GUARD_VULKAN(vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS);
 }
 
+void VulkanContext::createDescriptorSetPool()
+{
+    std::vector<VkDescriptorPoolSize> poolSizes = {
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 10},
+        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 50},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 10}
+    };
+
+    VkDescriptorPoolCreateInfo uniformPoolInfo = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .maxSets = 100,
+        .poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
+        .pPoolSizes = poolSizes.data()
+    };
+    vkCreateDescriptorPool(device, &uniformPoolInfo, nullptr, &descriptorPool);
+}
+
 void VulkanContext::createSwapChain(VkSwapchainCreateFlagsKHR flags)
 {
     VkSurfaceCapabilitiesKHR surfaceCapabilities = {};
@@ -257,8 +274,8 @@ VulkanContext::~VulkanContext()
                     vkDestroyImageView(device, i, nullptr);
             vkDestroySwapchainKHR(device, swapchain, nullptr);
         }
-        pModel->unloadRadFoam();
         vmaDestroyAllocator(allocator);
+        vkDestroyDescriptorPool(device, descriptorPool, nullptr);
         vkDestroyCommandPool(device, commandPool, nullptr);
 
         for (auto &i : callbacksDestroyDevice)

@@ -9,6 +9,12 @@ int main(int argc, char *argv[])
     auto pArgs = std::make_shared<RadFoamVulkanArgs>(args);
 
     initializeWindow(pArgs);
+    auto pModel = std::make_shared<RadFoam>(pArgs);
+    pModel->loadRadFoam();
+
+    auto pAABB = std::make_shared<AABBTree>(pModel);
+    pAABB->buildAABBLeaves();
+
         
     while (!glfwWindowShouldClose(pWindow))
     {

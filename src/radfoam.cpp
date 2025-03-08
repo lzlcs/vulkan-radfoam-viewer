@@ -64,92 +64,24 @@ RadFoam::RadFoam(std::shared_ptr<RadFoamVulkanArgs> pArgs)
 
 void RadFoam::loadRadFoam()
 {
-    std::cout << "Loading scene fronm CPU to GPU" << std::endl; 
+    std::cout << "Loading scene fronm CPU to GPU" << std::endl;
 
     auto &context = VulkanContext::getContext();
     const size_t vertexBufferSize = sizeof(RadFoamVertex) * vertices.size();
     const size_t adjacencyBufferSize = sizeof(uint32_t) * adjacency.indices.size();
 
-    // Create Vertex Buffer
-    {
-        // Staging buffer
-        VkBufferCreateInfo bufferCI{};
-        bufferCI.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferCI.size = vertexBufferSize;
-        bufferCI.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-        bufferCI.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    vertexBuffer = std::make_shared<Buffer>(vertexBufferSize,
+                                            VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                                                VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                                            VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE);
 
-        VmaAllocationCreateInfo allocCI{};
-        allocCI.usage = VMA_MEMORY_USAGE_AUTO;
-        allocCI.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                        VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    vertexBuffer->uploadData(vertices.data(), vertexBufferSize);
 
-        VkBuffer stagingBuffer;
-        VmaAllocation stagingAlloc;
-        VmaAllocationInfo allocInfo;
-        ERR_GUARD_VULKAN(vmaCreateBuffer(context.getAllocator(), &bufferCI, &allocCI,
-                                         &stagingBuffer, &stagingAlloc, &allocInfo));
-        memcpy(allocInfo.pMappedData, vertices.data(), vertexBufferSize);
-
-        // Device buffer
-        bufferCI.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-        allocCI.flags = 0;
-        allocCI.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-        ERR_GUARD_VULKAN(vmaCreateBuffer(context.getAllocator(), &bufferCI, &allocCI,
-                                         &buffer.vertexBuffer, &buffer.vertexBufferAlloc, nullptr));
-
-        // Copy operation
-        auto cmd = context.beginSingleTimeCommands();
-        VkBufferCopy copyRegion{0, 0, vertexBufferSize};
-        vkCmdCopyBuffer(cmd, stagingBuffer, buffer.vertexBuffer, 1, &copyRegion);
-        context.endSingleTimeCommands(cmd);
-
-        vmaDestroyBuffer(context.getAllocator(), stagingBuffer, stagingAlloc);
-    }
-
-    // Create Adjacency Buffer
-    {
-        // Staging buffer
-        VkBufferCreateInfo bufferCI{};
-        bufferCI.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferCI.size = adjacencyBufferSize;
-        bufferCI.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-        bufferCI.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-        VmaAllocationCreateInfo allocCI{};
-        allocCI.usage = VMA_MEMORY_USAGE_AUTO;
-        allocCI.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                        VMA_ALLOCATION_CREATE_MAPPED_BIT;
-
-        VkBuffer stagingBuffer;
-        VmaAllocation stagingAlloc;
-        VmaAllocationInfo allocInfo;
-        ERR_GUARD_VULKAN(vmaCreateBuffer(context.getAllocator(), &bufferCI, &allocCI,
-                                         &stagingBuffer, &stagingAlloc, &allocInfo));
-        memcpy(allocInfo.pMappedData, adjacency.indices.data(), adjacencyBufferSize);
-
-        // Device buffer
-        bufferCI.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-        allocCI.flags = 0;
-        allocCI.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-        ERR_GUARD_VULKAN(vmaCreateBuffer(context.getAllocator(), &bufferCI, &allocCI,
-                                         &buffer.adjacencyBuffer, &buffer.adjacencyBufferAlloc, nullptr));
-
-        // Copy operation
-        auto cmd = context.beginSingleTimeCommands();
-        VkBufferCopy copyRegion{0, 0, adjacencyBufferSize};
-        vkCmdCopyBuffer(cmd, stagingBuffer, buffer.adjacencyBuffer, 1, &copyRegion);
-        context.endSingleTimeCommands(cmd);
-
-        vmaDestroyBuffer(context.getAllocator(), stagingBuffer, stagingAlloc);
-    }
+    adjacencyBuffer = std::make_shared<Buffer>(adjacencyBufferSize,
+                                               VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                                                   VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                                               VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE);
+    adjacencyBuffer->uploadData(adjacency.indices.data(), adjacencyBufferSize);
 
     std::cout << "Loading Completed." << std::endl;
-}
-
-void RadFoam::unloadRadFoam()
-{
-    auto &context = VulkanContext::getContext();
-    vmaDestroyBuffer(context.getAllocator(), buffer.vertexBuffer, buffer.vertexBufferAlloc);
-    vmaDestroyBuffer(context.getAllocator(), buffer.adjacencyBuffer, buffer.adjacencyBufferAlloc);
 }

@@ -30,11 +30,12 @@ public:
     auto getInstance() const { return this->instance; }
     auto getSurface() const { return this->surface; }
     auto getDevice() const { return this->device; }
-    auto getModel() const { return this->pModel; }
+    // auto getModel() const { return this->pModel; }
     auto getAllocator() const { return this->allocator; }
+    auto getDescriptorPool() const { return this->descriptorPool; }
 
     void setArgs(auto pArgs) { this->pArgs = pArgs; }
-    void setModel(std::shared_ptr<RadFoam> pModel) { this->pModel = pModel; }
+    // void setModel(std::shared_ptr<RadFoam> pModel) { this->pModel = pModel; }
     void setSurface(VkSurfaceKHR surface) { this->surface = surface; }
 
     void addInstanceLayer(const char *layerName) { instanceLayers.push_back(layerName); }
@@ -48,6 +49,7 @@ public:
     void createLogicalDevice(VkDeviceCreateFlags flag = 0);
     void createVMAAllocator();
     void createCommandPool();
+    void createDescriptorSetPool();
     void createSwapChain(VkSwapchainCreateFlagsKHR flags = 0);
     void recreateSwapChain();
     void createSwapChainInternal();
@@ -59,7 +61,7 @@ public:
 
 private:
     std::shared_ptr<RadFoamVulkanArgs> pArgs;
-    std::shared_ptr<RadFoam> pModel;
+    // std::shared_ptr<RadFoam> pModel;
     VmaAllocator allocator;
 
     VkInstance instance = VK_NULL_HANDLE;
@@ -76,6 +78,7 @@ private:
     VkPhysicalDeviceMemoryProperties physicalDeviceMemoryProperties;
 
     VkCommandPool commandPool;
+    VkDescriptorPool descriptorPool;
 
     VkDevice device = VK_NULL_HANDLE;
     uint32_t queueFamilyIndex_graphics = VK_QUEUE_FAMILY_IGNORED;

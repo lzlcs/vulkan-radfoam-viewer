@@ -94,9 +94,10 @@ void initializeWindow(std::shared_ptr<RadFoamVulkanArgs> pArgs)
     context.getPhysicalDevices();
     context.createLogicalDevice();
     context.createCommandPool();
+    context.createDescriptorSetPool();
     context.createVMAAllocator();
-    context.setModel(std::make_shared<RadFoam>(pArgs));
-    context.getModel()->loadRadFoam();
+    // context.setModel(std::make_shared<RadFoam>(pArgs));
+    // context.getModel()->loadRadFoam();
     
     VkSurfaceKHR surface = VK_NULL_HANDLE;
     ERR_GUARD_VULKAN(glfwCreateWindowSurface(context.getInstance(), pWindow, nullptr, &surface));
