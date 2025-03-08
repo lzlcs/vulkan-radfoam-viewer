@@ -14,7 +14,7 @@ RadFoam::RadFoam(std::shared_ptr<RadFoamVulkanArgs> pArgs)
         }
 
         auto &vert_elem = ply.getElement("vertex");
-        const size_t vertex_count = vert_elem.count;
+        numVertice = vert_elem.count;
 
         auto positions = ply.getVertexPositions();
         auto colors = ply.getVertexColors();
@@ -28,8 +28,8 @@ RadFoam::RadFoam(std::shared_ptr<RadFoamVulkanArgs> pArgs)
             sh_vectors[i] = vert_elem.getProperty<float>(prop_name);
         }
 
-        vertices.resize(vertex_count);
-        for (size_t i = 0; i < vertex_count; ++i)
+        vertices.resize(numVertice);
+        for (size_t i = 0; i < numVertice; ++i)
         {
             auto &v = vertices[i];
             v.pos_density = {
@@ -53,6 +53,7 @@ RadFoam::RadFoam(std::shared_ptr<RadFoamVulkanArgs> pArgs)
         }
 
         auto &adj_elem = ply.getElement("adjacency");
+        numAdjacency = adj_elem.count;
         adjacency.indices = adj_elem.getProperty<uint32_t>("adjacency");
     }
     catch (const std::exception &e)
