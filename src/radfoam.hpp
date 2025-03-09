@@ -4,7 +4,6 @@
 #include <vulkan/vulkan.h>
 #include "vulkan_context.h"
 #include "compute_pipeline.hpp"
-#include <happly/happly.h>
 #include <glm/glm.hpp>
 #include <array>
 #include <memory>
@@ -16,9 +15,9 @@ class RadFoam
 public:
     struct RadFoamVertex
     {
-        alignas(16) glm::vec4 pos_density;
+        alignas(16) glm::vec4 pos_offset;
         alignas(16) glm::u8vec4 color;
-        uint32_t adjacency_offset;
+        float density;
         alignas(16) std::array<float, 45> sh_coeffs;
     };
 
@@ -31,7 +30,7 @@ public:
     auto getVertexBuffer() { return vertexBuffer; }
     auto getAdjacencyBuffer() { return adjacencyBuffer; }
 
-private:
+// private:
     std::vector<RadFoamVertex> vertices;
     std::vector<uint32_t> adjacency;
     std::shared_ptr<Buffer> vertexBuffer;
@@ -54,56 +53,9 @@ public:
         alignas(16) glm::vec3 max;
     };
 
-    AABBTree(std::shared_ptr<RadFoam> pModel) : pModel(pModel)
-    {
-        auto getLevel = [](uint32_t x)
-        { return x > 1 ? glm::log2(x - 1) + 1 : 1; };
-
-        auto numVertices = pModel->getNumVertices();
-        numLevels = getLevel(numVertices);
-
-        size_t aabbBufferSize = sizeof(AABB) * (1 << numLevels);
-        aabbBuffer = std::make_shared<Buffer>(aabbBufferSize,
-                                              VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                                                  VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                                              VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE);
-        std::cout << "Initialize AABB Tree: numLevels(" << numLevels << ")" << std::endl;
-    }
-
-    void buildAABBLeaves()
-    {
-        auto &context = VulkanContext::getContext();
-        auto shader = std::make_shared<Shader>("build_leaves.comp.spv");
-        // Create descriptor set
-        std::vector<DescriptorSet::BindingInfo> bindings = {
-            {0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT}, // Vertex Buffer
-            {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT}  // AABB Buffer
-        };
-        auto set = std::make_shared<DescriptorSet>(bindings);
-        set->bindBuffers(0, {pModel->getVertexBuffer()->getBuffer()});
-        set->bindBuffers(1, {aabbBuffer->getBuffer()});
-
-        // Create compute pipeline
-        std::vector<VkDescriptorSetLayout> descriptorSetLayouts{set->getDescriptorSetLayout()};
-        std::vector<VkDescriptorSet> descriptorSets{set->getDescriptorSet()};
-        std::vector<VkPushConstantRange> pushConstants;
-        auto pipeline = std::make_shared<ComputePipeline>(
-            shader->shaderModule, descriptorSetLayouts, pushConstants);
-
-        auto cmd = context.beginSingleTimeCommands();
-        pipeline->bindDescriptorSets(cmd, descriptorSets);
-        auto workGroups = ((1 << numLevels - 1) + 255) / 256;
-        vkCmdDispatch(cmd, workGroups, 1, 1);
-
-        VkMemoryBarrier barrier = {
-            .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-            .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-            .dstAccessMask = VK_ACCESS_SHADER_READ_BIT};
-        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                             0, 1, &barrier, 0, nullptr, 0, nullptr);
-
-        context.endSingleTimeCommands(cmd);
-    }
+    AABBTree(std::shared_ptr<RadFoam> pModel);
+    void buildAABBLeaves();
+    void buildAABBTree();
 
     // void buildAABBTree()
     // {

@@ -1,6 +1,6 @@
 #include "RadFoam.hpp"
 #include <stdexcept>
-#include <miniply/miniply.h>
+#include <fstream>
 
 #pragma pack(push, 1)
 struct RawVertex
@@ -58,9 +58,9 @@ void RadFoam::parseVertexData(std::istream &is)
     {
         auto &src = rawVertices[i];
         auto &dst = vertices[i];
-        dst.pos_density = glm::vec4(src.x, src.y, src.z, src.density);
+        dst.pos_offset = glm::vec4(src.x, src.y, src.z, src.adjacency_offset);
         dst.color = glm::u8vec4(src.r, src.g, src.b, 255);
-        dst.adjacency_offset = src.adjacency_offset;
+        dst.density = src.density;
         std::copy_n(src.sh_coeffs, 45, dst.sh_coeffs.begin());
     }
 }
@@ -100,14 +100,90 @@ void RadFoam::uploadRadFoam()
 
     vertexBuffer = std::make_shared<Buffer>(vertexBufferSize,
                                             VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                                                VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                                                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                                             VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE);
 
     vertexBuffer->uploadData(vertices.data(), vertexBufferSize);
 
     adjacencyBuffer = std::make_shared<Buffer>(adjacencyBufferSize,
                                                VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                                                   VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                                                   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                                                VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE);
     adjacencyBuffer->uploadData(adjacency.data(), adjacencyBufferSize);
+}
+
+AABBTree::AABBTree(std::shared_ptr<RadFoam> pModel) : pModel(pModel)
+{
+    auto getLevel = [](uint32_t x)
+    { return x > 1 ? glm::log2(x - 1) + 1 : 1; };
+
+    auto numVertices = pModel->getNumVertices();
+    numLevels = getLevel(numVertices);
+
+    size_t aabbBufferSize = sizeof(AABB) * (1 << numLevels);
+    aabbBuffer = std::make_shared<Buffer>(aabbBufferSize,
+                                          VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                                              VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                                              VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                          VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE);
+    std::cout << "Initialize AABB Tree: numLevels(" << numLevels << ")" << std::endl;
+}
+
+void AABBTree::buildAABBLeaves()
+{
+    auto &context = VulkanContext::getContext();
+    auto shader = std::make_shared<Shader>("src/shader/spv/build_leaves.comp.spv");
+
+    // Create descriptor set
+    std::vector<DescriptorSet::BindingInfo> bindings = {
+        {0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT}, // Vertex Buffer
+        {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT}  // AABB Buffer
+    };
+    auto set = std::make_shared<DescriptorSet>(bindings);
+    set->bindBuffers(0, {pModel->getVertexBuffer()->getBuffer()});
+    set->bindBuffers(1, {aabbBuffer->getBuffer()});
+
+    // Create compute pipeline
+    std::vector<VkDescriptorSetLayout> descriptorSetLayouts{set->getDescriptorSetLayout()};
+    std::vector<VkDescriptorSet> descriptorSets{set->getDescriptorSet()};
+    std::vector<VkPushConstantRange> pushConstants;
+    auto pipeline = std::make_shared<ComputePipeline>(
+        shader->shaderModule, descriptorSetLayouts, pushConstants);
+
+    auto cmd = context.beginSingleTimeCommands();
+    pipeline->bindDescriptorSets(cmd, descriptorSets);
+    auto workGroups = ((1 << numLevels - 1) + 255) / 256;
+    vkCmdDispatch(cmd, workGroups, 1, 1);
+
+    VkMemoryBarrier barrier = {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+        .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT};
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         0, 1, &barrier, 0, nullptr, 0, nullptr);
+
+    context.endSingleTimeCommands(cmd);
+
+    // std::vector<AABB> tmp(1u << numLevels);
+    // aabbBuffer->downloadData(tmp.data(), aabbBuffer->getSize());
+
+    // int x = 983388;
+    // std::cout << x << std::endl;
+    // for (int i = x - 5; i < x; i++)
+    // {
+    //     std::cout << tmp[i].min[0] << ' ';
+    //     std::cout << tmp[i].min[1] << ' ';
+    //     std::cout << tmp[i].min[2] << std::endl; 
+    //     std::cout << tmp[i].max[0] << ' ';
+    //     std::cout << tmp[i].max[1] << ' ';
+    //     std::cout << tmp[i].max[2] << std::endl;
+    //     // std::cout << pModel->vertices[i * 2].pos_offset[0] << ' ';
+    //     // std::cout << pModel->vertices[i * 2].pos_offset[1] << ' ';
+    //     // std::cout << pModel->vertices[i * 2].pos_offset[2] << std::endl;
+    //     // std::cout << pModel->vertices[i * 2 + 1].pos_offset[0] << ' ';
+    //     // std::cout << pModel->vertices[i * 2 + 1].pos_offset[1] << ' ';
+    //     // std::cout << pModel->vertices[i * 2 + 1].pos_offset[2] << std::endl;
+    //     std::cout << std::endl;
+    // }
+
 }

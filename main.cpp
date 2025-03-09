@@ -11,8 +11,8 @@ int main(int argc, char *argv[])
     initializeWindow(pArgs);
     auto pModel = std::make_shared<RadFoam>(pArgs);
 
-    // auto pAABB = std::make_shared<AABBTree>(pModel);
-    // pAABB->buildAABBLeaves();
+    auto pAABB = std::make_shared<AABBTree>(pModel);
+    pAABB->buildAABBLeaves();
 
         
     while (!glfwWindowShouldClose(pWindow))

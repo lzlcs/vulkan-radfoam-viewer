@@ -48,3 +48,26 @@ void Buffer::uploadData(const void *data, VkDeviceSize size)
     vkCmdCopyBuffer(cmd, stagingBuffer.buffer, buffer, 1, &copyRegion);
     context.endSingleTimeCommands(cmd);
 }
+
+void Buffer::downloadData(void *data, VkDeviceSize dataSize)
+{
+    assert(dataSize <= size && "Data size exceeds buffer capacity");
+
+    Buffer stagingBuffer(dataSize,
+                         VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                         VMA_MEMORY_USAGE_CPU_ONLY,
+                         VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
+
+    auto &context = VulkanContext::getContext();
+    auto allocator = context.getAllocator();
+
+    auto cmd = context.beginSingleTimeCommands();
+    VkBufferCopy copyRegion{0, 0, size};
+    vkCmdCopyBuffer(cmd, buffer, stagingBuffer.buffer, 1, &copyRegion);
+    context.endSingleTimeCommands(cmd);
+
+    void *mappedData;
+    vmaMapMemory(allocator, stagingBuffer.allocation, &mappedData);
+    memcpy(data, mappedData, dataSize);
+    vmaUnmapMemory(allocator, stagingBuffer.allocation);
+}

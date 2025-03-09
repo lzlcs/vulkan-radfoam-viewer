@@ -11,7 +11,10 @@ public:
     ~Buffer();
 
     void uploadData(const void *data, VkDeviceSize size);
+    void downloadData(void* data, VkDeviceSize size); 
+
     VkBuffer getBuffer() const { return buffer; }
+    VkDeviceSize getSize() const { return size; }
 
 // private:
     VkBuffer buffer = VK_NULL_HANDLE;

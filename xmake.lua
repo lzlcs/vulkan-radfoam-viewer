@@ -5,9 +5,11 @@ target("radfoam-vulkan-viewer")
     set_kind("binary")
     set_rundir("$(projectdir)")
 
-    -- before_build(function (target)
-    --     os.run("src\\compile.bat")
-    -- end)
+    before_build(function (target)
+        if os.exec("scripts\\compile_shaders.bat") then
+            raise("Error compiling shaders")
+        end
+    end)
 
     add_includedirs("./lib")
 

@@ -1,6 +1,20 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
+struct AABB {
+    vec3 min;
+    vec3 max;
+};
+
+struct Vertex {
+    vec4 pos_offset; 
+    uint color;
+    float density;
+    vec2 padding;
+    float sh_coeffs[45];
+};
+
+
 layout(std430, binding = 0) readonly buffer Vertices {
     Vertex vertices[];
 };
@@ -9,28 +23,18 @@ layout(std430, binding = 1) writeonly buffer AABBs {
     AABB leaves[];
 };
 
-struct AABB {
-    vec3 min;
-    vec3 max;
-};
-
 layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 
 void main() {
 
-    if (vertices.length() == 0) return;
-
     uint idx = gl_GlobalInvocationID.x;
-    uint requiredThreads = (vertices.length() + 1) / 2;
 
-    if (idx >= requiredThreads) return;
-
-    uint left = idx * 2;
+    uint left = min(idx * 2, vertices.length() - 1);
     uint right = min(left + 1, vertices.length() - 1);
 
-    vec3 pos1 = vertices[left].pos_density.xyz;
-    vec3 pos2 = vertices[right].pos_density.xyz;
+    vec3 pos1 = vertices[left].pos_offset.xyz;
+    vec3 pos2 = vertices[right].pos_offset.xyz;
 
-    leaves[idx].min = min(pos1, pos2);
-    leaves[idx].max = max(pos1, pos2);
+    leaves[idx].min = vec3(min(pos1.x, pos2.x), min(pos1.y, pos2.y), min(pos1.z, pos2.z));
+    leaves[idx].max = vec3(max(pos1.x, pos2.x), max(pos1.y, pos2.y), max(pos1.z, pos2.z));
 }
