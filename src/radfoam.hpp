@@ -53,54 +53,15 @@ public:
         alignas(16) glm::vec3 max;
     };
 
+    struct Constants
+    {
+        uint32_t numNodes;
+        uint32_t offset;
+    };
+
     AABBTree(std::shared_ptr<RadFoam> pModel);
     void buildAABBLeaves();
     void buildAABBTree();
-
-    // void buildAABBTree()
-    // {
-
-    //     auto shader = std::make_shared<Shader>("tree_builder.comp.spv");
-
-    //     // Create descriptor set
-    //     std::vector<DescriptorSet::BindingInfo> bindings = {
-    //         {0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT}, // Vertex Buffer
-    //         {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT}  // AABB Buffer
-    //     };
-    //     auto set = std::make_shared<DescriptorSet>(bindings);
-    //     set->bindBuffers(0, {pModel->getVertexBuffer().getBuffer()});
-    //     set->bindBuffers(1, {aabbBuffer.getBuffer()});
-
-    //     // Create compute pipeline
-    //     std::vector<VkDescriptorSetLayout> descriptorSetLayouts{set->getDescriptorSetLayout()};
-    //     std::vector<VkDescriptorSet> descriptorSets{set->getDescriptorSet()};
-    //     std::vector<VkPushConstantRange> pushConstants{
-    //         {VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(int)} // Currrent level
-    //     };
-    //     auto pipeline = std::make_shared<ComputePipeline>(
-    //         shader->shaderModule, descriptorSetLayouts, pushConstants);
-
-    //     // Build AABB Tree
-    //     auto cmd = context.beginSingleTimeCommands();
-    //     for (int i = numLevels - 1; i >= 0; i--)
-    //     {
-    //         pipeline->bindDescriptorSets(cmd, descriptorSets);
-    //         pipeline->pushConstants(cmd, VK_SHADER_STAGE_COMPUTE_BIT, sizeof(int), &i);
-    //         auto workGroups = (glm::min((1u << i), numVertices) + 255) / 256;
-    //         vkCmdDispatch(cmd, workGroups, 1, 1);
-
-    //         VkMemoryBarrier barrier{
-    //             .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-    //             .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-    //             .dstAccessMask = VK_ACCESS_SHADER_READ_BIT};
-    //         vkCmdPipelineBarrier(
-    //             cmd,
-    //             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-    //             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-    //             0, 1, &barrier, 0, nullptr, 0, nullptr);
-    //     }
-    //     context.endSingleTimeCommands(cmd);
-    // }
 
 private:
     std::shared_ptr<RadFoam> pModel;

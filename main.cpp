@@ -13,6 +13,7 @@ int main(int argc, char *argv[])
 
     auto pAABB = std::make_shared<AABBTree>(pModel);
     pAABB->buildAABBLeaves();
+    pAABB->buildAABBTree();
 
         
     while (!glfwWindowShouldClose(pWindow))

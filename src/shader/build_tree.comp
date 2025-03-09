@@ -1,0 +1,31 @@
+#version 450
+
+struct AABB {
+    vec3 min;
+    vec3 max;
+};
+
+layout(std430, binding = 0) writeonly buffer AABBs {
+    AABB nodes[];
+};
+
+layout(push_constant) uniform PushData {
+    uint numNodes;
+    uint offset;
+} pc;
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+void main() {
+
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= pc.numNodes) return;
+
+
+    uint lastLevelBegin = pc.offset - pc.numNodes * 2;
+    uint left = lastLevelBegin + (idx * 2);
+    uint right = lastLevelBegin + (idx * 2 + 1);
+
+    nodes[idx + pc.offset].min = min(nodes[left].min, nodes[right].min);
+    nodes[idx + pc.offset].max = max(nodes[left].max, nodes[right].max);
+}

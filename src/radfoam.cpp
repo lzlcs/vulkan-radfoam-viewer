@@ -173,7 +173,7 @@ void AABBTree::buildAABBLeaves()
     // {
     //     std::cout << tmp[i].min[0] << ' ';
     //     std::cout << tmp[i].min[1] << ' ';
-    //     std::cout << tmp[i].min[2] << std::endl; 
+    //     std::cout << tmp[i].min[2] << std::endl;
     //     std::cout << tmp[i].max[0] << ' ';
     //     std::cout << tmp[i].max[1] << ' ';
     //     std::cout << tmp[i].max[2] << std::endl;
@@ -185,5 +185,72 @@ void AABBTree::buildAABBLeaves()
     //     // std::cout << pModel->vertices[i * 2 + 1].pos_offset[2] << std::endl;
     //     std::cout << std::endl;
     // }
+}
 
+void AABBTree::buildAABBTree()
+{
+    if (numLevels == 1)
+        return;
+
+    auto &context = VulkanContext::getContext();
+    auto shader = std::make_shared<Shader>("src/shader/spv/build_tree.comp.spv");
+
+    // Create descriptor set
+    std::vector<DescriptorSet::BindingInfo> bindings = {
+        {0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT}, // AABB Buffer
+    };
+    auto set = std::make_shared<DescriptorSet>(bindings);
+    set->bindBuffers(0, {aabbBuffer->getBuffer()});
+
+    // Create compute pipeline
+    std::vector<VkDescriptorSetLayout> descriptorSetLayouts{set->getDescriptorSetLayout()};
+    std::vector<VkDescriptorSet> descriptorSets{set->getDescriptorSet()};
+    std::vector<VkPushConstantRange> pushConstants{
+        {VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Constants)}};
+    auto pipeline = std::make_shared<ComputePipeline>(
+        shader->shaderModule, descriptorSetLayouts, pushConstants);
+
+    auto cmd = context.beginSingleTimeCommands();
+    pipeline->bindDescriptorSets(cmd, descriptorSets);
+    for (int i = numLevels - 2; i >= 0; i--)
+    {
+        Constants cons{(1u << i),                          // Total nodes in this level
+                       (1u << numLevels) - (1u << i + 1)}; // First node's offset in AABB Buffer
+
+        pipeline->pushConstants(cmd, VK_SHADER_STAGE_COMPUTE_BIT, sizeof(Constants), &cons);
+
+        auto workGroups = (cons.numNodes + 255) / 256;
+        vkCmdDispatch(cmd, workGroups, 1, 1);
+
+        VkMemoryBarrier barrier = {
+            .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+            .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+            .dstAccessMask = VK_ACCESS_SHADER_READ_BIT};
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                             0, 1, &barrier, 0, nullptr, 0, nullptr);
+    }
+    context.endSingleTimeCommands(cmd);
+
+    // std::vector<AABB> tmp(1u << numLevels);
+    // aabbBuffer->downloadData(tmp.data(), aabbBuffer->getSize());
+
+    // int x = 2097152;
+    // // int x = 1048576 + 3;
+    // std::cout << x << std::endl;
+    // for (int i = x - 5; i < x; i++)
+    // {
+    //     std::cout << tmp[i].min[0] << ' ';
+    //     std::cout << tmp[i].min[1] << ' ';
+    //     std::cout << tmp[i].min[2] << std::endl;
+    //     std::cout << tmp[i].max[0] << ' ';
+    //     std::cout << tmp[i].max[1] << ' ';
+    //     std::cout << tmp[i].max[2] << std::endl;
+    //     // std::cout << pModel->vertices[i * 2].pos_offset[0] << ' ';
+    //     // std::cout << pModel->vertices[i * 2].pos_offset[1] << ' ';
+    //     // std::cout << pModel->vertices[i * 2].pos_offset[2] << std::endl;
+    //     // std::cout << pModel->vertices[i * 2 + 1].pos_offset[0] << ' ';
+    //     // std::cout << pModel->vertices[i * 2 + 1].pos_offset[1] << ' ';
+    //     // std::cout << pModel->vertices[i * 2 + 1].pos_offset[2] << std::endl;
+    //     std::cout << std::endl;
+    // }
 }
