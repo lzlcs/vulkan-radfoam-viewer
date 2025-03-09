@@ -22,27 +22,27 @@ public:
         alignas(16) std::array<float, 45> sh_coeffs;
     };
 
-    struct RadFoamAdjacency
-    {
-        std::vector<uint32_t> indices;
-    };
     static_assert(sizeof(RadFoamVertex) == 56 * sizeof(float), "RadFoamVertex size mismatch");
 
     explicit RadFoam(std::shared_ptr<RadFoamVulkanArgs> pArgs);
-    void loadRadFoam();
 
-    auto getNumVertice() { return this->numVertice; }
+    auto getNumVertices() { return this->numVertices; }
     auto getNumAdjacency() { return this->numAdjacency; }
     auto getVertexBuffer() { return vertexBuffer; }
     auto getAdjacencyBuffer() { return adjacencyBuffer; }
 
 private:
     std::vector<RadFoamVertex> vertices;
-    RadFoamAdjacency adjacency;
+    std::vector<uint32_t> adjacency;
     std::shared_ptr<Buffer> vertexBuffer;
     std::shared_ptr<Buffer> adjacencyBuffer;
-    uint32_t numVertice;
+    uint32_t numVertices;
     uint32_t numAdjacency;
+
+    void parseHeader(std::istream &is);
+    void parseVertexData(std::istream &is);
+    void parseAdjacencyData(std::istream &is);
+    void uploadRadFoam();
 };
 
 class AABBTree
@@ -59,13 +59,15 @@ public:
         auto getLevel = [](uint32_t x)
         { return x > 1 ? glm::log2(x - 1) + 1 : 1; };
 
-        auto numVertices = pModel->getNumVertice();
+        auto numVertices = pModel->getNumVertices();
         numLevels = getLevel(numVertices);
 
-        size_t aabbBufferSize = sizeof(AABB) * ((1 << numLevels) - 1 + numVertices);
-        aabbBuffer = Buffer(aabbBufferSize,
-                            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                            VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE);
+        size_t aabbBufferSize = sizeof(AABB) * (1 << numLevels);
+        aabbBuffer = std::make_shared<Buffer>(aabbBufferSize,
+                                              VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                                                  VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                                              VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE);
+        std::cout << "Initialize AABB Tree: numLevels(" << numLevels << ")" << std::endl;
     }
 
     void buildAABBLeaves()
@@ -79,7 +81,7 @@ public:
         };
         auto set = std::make_shared<DescriptorSet>(bindings);
         set->bindBuffers(0, {pModel->getVertexBuffer()->getBuffer()});
-        set->bindBuffers(1, {aabbBuffer.getBuffer()});
+        set->bindBuffers(1, {aabbBuffer->getBuffer()});
 
         // Create compute pipeline
         std::vector<VkDescriptorSetLayout> descriptorSetLayouts{set->getDescriptorSetLayout()};
@@ -150,6 +152,6 @@ public:
 
 private:
     std::shared_ptr<RadFoam> pModel;
-    Buffer aabbBuffer;
+    std::shared_ptr<Buffer> aabbBuffer;
     uint32_t numLevels;
 };
