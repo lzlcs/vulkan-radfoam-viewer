@@ -1,6 +1,7 @@
 #include "src/vulkan_context.h"
 #include "src/GLFWGeneral.h"
 #include "src/arguments.hpp"
+#include "src/renderer.hpp"
 
 
 int main(int argc, char *argv[])
@@ -10,20 +11,24 @@ int main(int argc, char *argv[])
 
     initializeWindow(pArgs);
     auto pModel = std::make_shared<RadFoam>(pArgs);
-
     auto pAABB = std::make_shared<AABBTree>(pModel);
-    pAABB->buildAABBLeaves();
-    pAABB->buildAABBTree();
 
+    // std::cout << pAABB->aabbTree[(1 << pAABB->numLevels) - 2].min[0] << std::endl;
+    // std::cout << pAABB->aabbTree[(1 << pAABB->numLevels) - 2].min[1] << std::endl;
+    // std::cout << pAABB->aabbTree[(1 << pAABB->numLevels) - 2].min[2] << std::endl;
+    // std::cout << pAABB->aabbTree[(1 << pAABB->numLevels) - 2].max[0] << std::endl;
+    // std::cout << pAABB->aabbTree[(1 << pAABB->numLevels) - 2].max[1] << std::endl;
+    // std::cout << pAABB->aabbTree[(1 << pAABB->numLevels) - 2].max[2] << std::endl;
+
+    auto renderer = std::make_shared<Renderer>(pModel, pAABB);
+    
         
     while (!glfwWindowShouldClose(pWindow))
     {
-
-        /*渲染过程，待填充*/
-
         glfwPollEvents();
+        renderer->render();
         TitleFps();
-    }
+    }   
 
     terminateWindow();
     return 0;

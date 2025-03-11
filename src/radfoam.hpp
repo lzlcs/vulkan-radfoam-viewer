@@ -29,6 +29,7 @@ public:
     auto getNumAdjacency() { return this->numAdjacency; }
     auto getVertexBuffer() { return vertexBuffer; }
     auto getAdjacencyBuffer() { return adjacencyBuffer; }
+    auto &getVertices() { return vertices; }
 
 // private:
     std::vector<RadFoamVertex> vertices;
@@ -60,11 +61,14 @@ public:
     };
 
     AABBTree(std::shared_ptr<RadFoam> pModel);
-    void buildAABBLeaves();
-    void buildAABBTree();
+    uint32_t nearestNeighbor(glm::vec3 &pos);
 
 private:
+    void buildAABBLeaves();
+    void buildAABBTree();
+    void downloadAABBTree();
     std::shared_ptr<RadFoam> pModel;
     std::shared_ptr<Buffer> aabbBuffer;
+    std::vector<AABB> aabbTree;
     uint32_t numLevels;
 };

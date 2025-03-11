@@ -1,6 +1,8 @@
 #include "RadFoam.hpp"
 #include <stdexcept>
 #include <fstream>
+#include <queue>
+#include <functional>
 
 #pragma pack(push, 1)
 struct RawVertex
@@ -126,6 +128,10 @@ AABBTree::AABBTree(std::shared_ptr<RadFoam> pModel) : pModel(pModel)
                                               VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                                               VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                                           VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE);
+
+    buildAABBLeaves();
+    buildAABBTree();
+    downloadAABBTree();
     std::cout << "Initialize AABB Tree: numLevels(" << numLevels << ")" << std::endl;
 }
 
@@ -154,14 +160,6 @@ void AABBTree::buildAABBLeaves()
     pipeline->bindDescriptorSets(cmd, descriptorSets);
     auto workGroups = ((1 << numLevels - 1) + 255) / 256;
     vkCmdDispatch(cmd, workGroups, 1, 1);
-
-    VkMemoryBarrier barrier = {
-        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-        .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT};
-    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                         0, 1, &barrier, 0, nullptr, 0, nullptr);
-
     context.endSingleTimeCommands(cmd);
 
     // std::vector<AABB> tmp(1u << numLevels);
@@ -253,4 +251,92 @@ void AABBTree::buildAABBTree()
     //     // std::cout << pModel->vertices[i * 2 + 1].pos_offset[2] << std::endl;
     //     std::cout << std::endl;
     // }
+}
+
+void AABBTree::downloadAABBTree()
+{
+    aabbTree.resize(1 << numLevels);
+    aabbBuffer->downloadData(aabbTree.data(), aabbBuffer->getSize());
+}
+
+uint32_t AABBTree::nearestNeighbor(glm::vec3 &pos)
+{
+//     auto printVec3 = [](auto &a)
+//     {
+//         std::cout << a[0] << ' ' << a[1] << ' ' << a[2] << std::endl;
+//     };
+    // auto distance2Node = [&printVec3](AABBTree::AABB &node, glm::vec3 &p) -> float
+    auto distance2Node = [](AABBTree::AABB &node, glm::vec3 &p) -> float
+    {
+        glm::vec3 d = glm::max(glm::max(node.min - p, glm::vec3(0)), p - node.max);
+        auto outDist = glm::length(d);
+        auto inDist = std::min(node.max.x - p.x, p.x - node.min.x);
+        inDist = std::min(inDist, std::min(node.max.y - p.y, p.y - node.min.y));
+        inDist = std::min(inDist, std::min(node.max.z - p.z, p.z - node.min.z));
+
+        return outDist > 1e-6 ? outDist : -inDist;
+    };
+
+    uint32_t minIdx = -1;
+    float minDist = std::numeric_limits<float>::max();;
+
+    std::function<uint32_t(uint32_t, uint32_t)> check =
+        [&](uint32_t idx, uint32_t level)
+    {
+
+        auto level_start = ((1 << numLevels) - (1 << level + 1));
+        auto node_idx = (level_start + idx);
+        // std::cout << "DFS: " << node_idx << ' ' << level << std::endl;
+
+        if (level == numLevels - 1)
+        {
+            uint32_t point_start_idx = node_idx * 2;
+
+            for (uint32_t i = 0; i < 2; ++i)
+            {
+                uint32_t pointIdx = point_start_idx + i;
+                pointIdx = std::min(pointIdx, pModel->getNumVertices() - 1);
+
+                auto point = glm::vec3(pModel->getVertices()[pointIdx].pos_offset);
+
+                float dist = glm::length(pos - point);
+
+                if (dist < minDist)
+                    minDist = dist, minIdx = pointIdx;
+            }
+            return 0;
+        }
+        float dist = distance2Node(aabbTree[node_idx], pos);
+        if (dist < minDist) return 0;
+        else return 1;
+    };
+
+    uint32_t current_depth = 0;
+    uint32_t current_node = 0;
+
+    for (;;) {
+        auto action = check(current_node, current_depth);
+        // std::cout << "action: " << action << std::endl;
+        if (action == 0 &&
+                   current_depth != numLevels - 1) {
+            current_node = 2 * current_node;
+            current_depth++;
+            continue;
+        }
+
+        current_node++;
+
+        uint32_t step_up_amount =
+            std::min(__builtin_ctz(current_node), (int)current_depth);
+
+        current_depth -= step_up_amount;
+        current_node = current_node >> step_up_amount;
+
+        uint32_t div = numLevels - current_depth;
+        uint32_t current_width = (pModel->getNumVertices() + (1 << div) - 1) >> div;
+
+        if (current_node >= current_width)
+            break;
+    }
+    return minIdx;
 }
