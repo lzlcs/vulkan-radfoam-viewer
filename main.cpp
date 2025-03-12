@@ -20,15 +20,17 @@ int main(int argc, char *argv[])
     // std::cout << pAABB->aabbTree[(1 << pAABB->numLevels) - 2].max[1] << std::endl;
     // std::cout << pAABB->aabbTree[(1 << pAABB->numLevels) - 2].max[2] << std::endl;
 
-    auto renderer = std::make_shared<Renderer>(pModel, pAABB);
+    auto renderer = std::make_shared<Renderer>(pArgs, pModel, pAABB);
     
         
-    while (!glfwWindowShouldClose(pWindow))
-    {
-        glfwPollEvents();
-        renderer->render();
-        TitleFps();
-    }   
+    renderer->render();
+
+    // while (!glfwWindowShouldClose(pWindow))
+    // {
+    //     glfwPollEvents();
+    //     renderer->render();
+    //     TitleFps();
+    // }   
 
     terminateWindow();
     return 0;

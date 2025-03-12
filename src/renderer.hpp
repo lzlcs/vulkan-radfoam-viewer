@@ -5,28 +5,55 @@
 class Renderer
 {
 public:
-    struct alignas(16) UniformBuffer
+    struct UniformData
     {
-        glm::vec3 cameraPosition;
-        uint32_t startPoint;
-        glm::mat4 projectionMatrix;
-        glm::mat4 viewMatrix;
+        alignas(16) glm::mat3x4 R; // Just for memory alignment
+        alignas(16) glm::vec3 T;
         uint32_t width;
         uint32_t height;
-        float tanFovx;
-        float tanFovy;
+        float focal_x;
+        float focal_y;
+        uint32_t startPoint;
     };
 
-    Renderer(std::shared_ptr<RadFoam> pModel, std::shared_ptr<AABBTree> pAABB);
+    static_assert(sizeof(UniformData) == 20 * sizeof(int));
+    // static_assert(offsetof(UniformData, T) == 9 * sizeof(int));
+    // static_assert(offsetof(UniformData, width) == 12 * sizeof(int));
+
+
+    struct Ray
+    {
+        alignas(16) glm::vec3 origin;
+        alignas(16) glm::vec3 direction;
+    };
+
+    Renderer(std::shared_ptr<RadFoamVulkanArgs> pArgs,
+             std::shared_ptr<RadFoam> pModel,
+             std::shared_ptr<AABBTree> pAABB);
+    ~Renderer();
 
     void render();
 
 private:
+    std::shared_ptr<RadFoamVulkanArgs> pArgs;
     std::shared_ptr<RadFoam> pModel;
     std::shared_ptr<AABBTree> pAABB;
 
+    VkCommandBuffer renderCommandBuffer = VK_NULL_HANDLE;
+
     std::shared_ptr<Buffer> uniformBuffer;
+    std::shared_ptr<Buffer> rayBuffer;
+    std::shared_ptr<Buffer> rgbBuffer;
+
+    std::shared_ptr<ComputePipeline> getRaysPipeline;
+    std::shared_ptr<ComputePipeline> rayTracingPipeline;
+
+    VkFence inFlightFence = VK_NULL_HANDLE;
 
     void handleInput();
     void updateUniform();
+    void createGetRaysPipeline();
+    void createRayTracingPipeline();
+    void recordRenderCommandBuffer();
+    void submitRenderCommandBuffer();
 };

@@ -20,8 +20,9 @@ struct RadFoamVulkanArgs : public argparse::Args
 {
     std::string &scenePath = arg("path to radfoam's output ply file");
     bool &validation = flag("validation", "enable vulkan vadilation layer");
-    uint32_t &windowWidth = kwarg("width", "Init Window Width").set_default(1280u);
-    uint32_t &windowHeight = kwarg("height", "Init Window Height").set_default(960u);
+    uint32_t &windowWidth = kwarg("width", "Init Window Width").set_default(780u);
+    uint32_t &windowHeight = kwarg("height", "Init Window Height").set_default(520u);
+    uint32_t &framesInFlight = kwarg("framesInFlight", "the number of frames in one flight").set_default(1u);
     bool &fullScreen = flag("fullScreen", "enable full screen window");
     bool &isResizable = flag("resizable", "enable resizable window");
     // bool &limitFrameRate = flag("limitFrameRate", "enable limit frame rate");

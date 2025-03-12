@@ -151,13 +151,13 @@ void AABBTree::buildAABBLeaves()
 
     // Create compute pipeline
     std::vector<VkDescriptorSetLayout> descriptorSetLayouts{set->getDescriptorSetLayout()};
-    std::vector<VkDescriptorSet> descriptorSets{set->getDescriptorSet()};
-    std::vector<VkPushConstantRange> pushConstants;
+    // std::vector<VkPushConstantRange> pushConstants;
     auto pipeline = std::make_shared<ComputePipeline>(
-        shader->shaderModule, descriptorSetLayouts, pushConstants);
+        shader->shaderModule, descriptorSetLayouts);
+    pipeline->addDescriptorSet(set);
 
     auto cmd = context.beginSingleTimeCommands();
-    pipeline->bindDescriptorSets(cmd, descriptorSets);
+    pipeline->bindDescriptorSets(cmd);
     auto workGroups = ((1 << numLevels - 1) + 255) / 256;
     vkCmdDispatch(cmd, workGroups, 1, 1);
     context.endSingleTimeCommands(cmd);
@@ -202,14 +202,14 @@ void AABBTree::buildAABBTree()
 
     // Create compute pipeline
     std::vector<VkDescriptorSetLayout> descriptorSetLayouts{set->getDescriptorSetLayout()};
-    std::vector<VkDescriptorSet> descriptorSets{set->getDescriptorSet()};
     std::vector<VkPushConstantRange> pushConstants{
         {VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Constants)}};
     auto pipeline = std::make_shared<ComputePipeline>(
         shader->shaderModule, descriptorSetLayouts, pushConstants);
+    pipeline->addDescriptorSet(set);
 
     auto cmd = context.beginSingleTimeCommands();
-    pipeline->bindDescriptorSets(cmd, descriptorSets);
+    pipeline->bindDescriptorSets(cmd);
     for (int i = numLevels - 2; i >= 0; i--)
     {
         Constants cons{(1u << i),                          // Total nodes in this level

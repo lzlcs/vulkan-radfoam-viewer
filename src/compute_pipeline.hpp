@@ -101,7 +101,7 @@ public:
     ComputePipeline(
         VkShaderModule computeShader,
         const std::vector<VkDescriptorSetLayout> &descriptorSetLayouts,
-        const std::vector<VkPushConstantRange> &pushConstantRanges)
+        const std::vector<VkPushConstantRange> &pushConstantRanges = {})
     {
         auto &context = VulkanContext::getContext();
         VkPipelineLayoutCreateInfo layoutInfo{
@@ -129,16 +129,18 @@ public:
 
     ~ComputePipeline()
     {
+        // std::cout << "destroy" << std::endl;
         auto device = VulkanContext::getContext().getDevice();
         vkDestroyPipeline(device, pipeline, nullptr);
         vkDestroyPipelineLayout(device, layout, nullptr);
     }
 
     void bindDescriptorSets(VkCommandBuffer commandBuffer,
-                            const std::vector<VkDescriptorSet> &descriptorSets,
                             const std::vector<uint32_t> &dynamicOffsets = {})
     {
+        // std::cout << commandBuffer <<std::endl;
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+        // std::cout << 1 << std::endl;
         vkCmdBindDescriptorSets(
             commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, layout, 0,
             static_cast<uint32_t>(descriptorSets.size()), descriptorSets.empty() ? nullptr : descriptorSets.data(),
@@ -152,7 +154,10 @@ public:
         vkCmdPushConstants(commandBuffer, layout, flags, 0, dataSize, pData);
     }
 
+    void addDescriptorSet(std::shared_ptr<DescriptorSet> set) { descriptorSets.push_back(set->getDescriptorSet()); }
+
 private:
     VkPipeline pipeline = VK_NULL_HANDLE;
     VkPipelineLayout layout = VK_NULL_HANDLE;
+    std::vector<VkDescriptorSet> descriptorSets;
 };

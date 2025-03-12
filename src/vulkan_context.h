@@ -33,6 +33,15 @@ public:
     // auto getModel() const { return this->pModel; }
     auto getAllocator() const { return this->allocator; }
     auto getDescriptorPool() const { return this->descriptorPool; }
+    auto getCommandPool() const { return this->commandPool; }
+
+    VkQueue getQueue(const std::string &type)
+    {
+        if (type == "compute") return queue_compute;
+        else if (type == "graphics") return queue_graphics;
+        else if (type == "presentation") return queue_presentation;
+        return VK_NULL_HANDLE;
+    }
 
     void setArgs(auto pArgs) { this->pArgs = pArgs; }
     // void setModel(std::shared_ptr<RadFoam> pModel) { this->pModel = pModel; }
