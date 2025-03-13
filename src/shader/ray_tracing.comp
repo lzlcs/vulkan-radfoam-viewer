@@ -1,0 +1,188 @@
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+#extension GL_EXT_debug_printf : enable
+#extension GL_EXT_spirv_intrinsics : enable
+
+struct Vertex {
+    vec3 pos; 
+    int padding1;
+    uint color;
+    float density;
+    int offset;
+    int padding2;
+    float sh_coeffs[45];
+};
+
+layout(std140, binding = 0) uniform UniformData {
+    mat3 R; 
+    vec3 T;
+    int width;
+    int height;
+    float focal_x;
+    float focal_y;
+    int startPoint;
+    int maxSteps;
+    float transmittanceThreshold;
+};
+
+layout(std430, set = 0, binding = 1) readonly buffer Vertices {
+    Vertex vertices[];
+};
+layout(std430, set = 0, binding = 2) readonly buffer Adjacency {
+    int adjacency[];
+};
+
+layout(std430, set = 1, binding = 0) writeonly buffer RGB {
+    vec4 rgb[];
+};
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+const float SH_C0 = 0.28209479177387814f;
+const float SH_C1 = 0.4886025119029199f;
+const float SH_C2[] = {
+    1.0925484305920792f,
+    -1.0925484305920792f,
+    0.31539156525252005f,
+    -1.0925484305920792f,
+    0.5462742152960396f
+};
+const float SH_C3[] = {
+    -0.5900435899266435f,
+    2.890611442640554f,
+    -0.4570457994644658f,
+    0.3731763325901154f,
+    -0.4570457994644658f,
+    1.445305721320277f,
+    -0.5900435899266435f
+};
+
+vec3 get_sh_vec3(uint node_idx, uint ind) {
+    return vec3(vertices[node_idx].sh_coeffs[(ind - 1) * 3], 
+                vertices[node_idx].sh_coeffs[(ind - 1) * 3 + 1], 
+                vertices[node_idx].sh_coeffs[(ind - 1) * 3 + 2]);
+}
+
+vec3 get_rgb_from_sh(int node_idx, vec3 ray_direction) {
+    
+    float x = ray_direction.x, y = ray_direction.y, z = ray_direction.z;
+
+    vec3 c = vec3(unpackUnorm4x8(vertices[node_idx].color));
+
+    // return vec3(0, 0, node_idx);
+    // return c;
+
+    c -= SH_C1 * get_sh_vec3(node_idx, 1) * y;
+    c += SH_C1 * get_sh_vec3(node_idx, 2) * z;
+    c -= SH_C1 * get_sh_vec3(node_idx, 3) * x;
+
+    c += SH_C2[0] * get_sh_vec3(node_idx, 4) * x * y;
+    c += SH_C2[1] * get_sh_vec3(node_idx, 5) * y * z;
+    c += SH_C2[2] * get_sh_vec3(node_idx, 6) * (2.0 * z * z - x * x - y * y);
+    c += SH_C2[3] * get_sh_vec3(node_idx, 7) * z * x;
+    c += SH_C2[4] * get_sh_vec3(node_idx, 8) * (x * x - y * y);
+
+    c += SH_C3[0] * get_sh_vec3(node_idx, 9) * (3.0 * x * x - y * y) * y;
+    c += SH_C3[1] * get_sh_vec3(node_idx, 10) * x * y * z;
+    c += SH_C3[2] * get_sh_vec3(node_idx, 11) * (4.0 * z * z - x * x - y * y) * y;
+    c += SH_C3[3] * get_sh_vec3(node_idx, 12) * z * (2.0 * z * z - 3.0 * x * x - 3.0 * y * y);
+    c += SH_C3[4] * get_sh_vec3(node_idx, 13) * x * (4.0 * z * z - x * x - y * y);
+    c += SH_C3[5] * get_sh_vec3(node_idx, 14) * (x * x - y * y) * z;
+    c += SH_C3[6] * get_sh_vec3(node_idx, 15) * x * (x * x - 3.0 * y * y);
+
+    c = min(vec3(1, 1, 1), max(c, vec3(0, 0, 0)));
+    return c;
+}
+
+
+void main() {
+
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= height * width) return;
+
+    // Get Ray's Information
+    float x = int(idx % uint(width)) + 0.5;
+    float y = int(idx / uint(width)) + 0.5;
+
+    vec3 dir_cam = vec3(
+        (x - width / 2.0) / focal_x,
+        (y - height / 2.0) / focal_y,
+        1.0
+    );
+
+    vec3 dir_world = (R) * (dir_cam);
+    vec3 ray_origin = T;
+    vec3 ray_direction = normalize(dir_world);
+
+    // Ray Tracing
+    int curr_node_idx = startPoint;
+    float curr_t = 0.0;
+    float transmittance = 1.0;
+    vec3 accumulated_rgb = vec3(0, 0, 0);
+
+    int n = 0;
+    for (; n < maxSteps; n++) 
+    {
+        uint adjacency_begin = (curr_node_idx == 0) ? 0 : vertices[curr_node_idx - 1].offset; 
+        uint adjacency_end = vertices[curr_node_idx].offset;
+        uint num_faces = adjacency_end - adjacency_begin;
+
+        float next_t = 1e9;
+        int next_node_idx = -1;
+
+        // Find Next Voronoi
+        for (int i = 0; i < num_faces; i++)
+        {
+            int node_idx = adjacency[adjacency_begin + i];
+            vec3 face_normal = vec3(vertices[node_idx].pos - vertices[curr_node_idx].pos);
+            vec3 face_origin = vertices[curr_node_idx].pos + face_normal / 2;
+
+            float delta_distance = dot(face_normal, ray_direction);
+            if (delta_distance == 0.0) continue;
+
+            float t = dot((face_origin - ray_origin), face_normal) / delta_distance;
+
+
+            if (t < next_t && t > curr_t) next_t = t, next_node_idx = node_idx;
+        }
+
+        if (next_node_idx == -1) break;
+
+
+
+        // Alpha Composite
+        float density = vertices[curr_node_idx].density;
+
+        float alpha = 1 - exp(-density * (next_t - curr_t));
+        float weight = alpha * transmittance;
+
+
+        vec3 curr_rgb = (alpha > 1e-6) ? get_rgb_from_sh(curr_node_idx, ray_direction)
+                                       : vec3(0, 0, 0);
+        
+
+        
+        // if (n == maxSteps - 1)
+        // {
+        //     rgb[idx] = vec4(vertices[curr_node_idx].sh_coeffs[0],
+        //         vertices[curr_node_idx].sh_coeffs[1],
+        //         vertices[curr_node_idx].sh_coeffs[2], curr_node_idx);
+        //     rgb[idx] = vec4(vertices[curr_node_idx].color,
+        //         vertices[curr_node_idx].sh_coeffs[1],
+        //         vertices[curr_node_idx].sh_coeffs[2], curr_node_idx);
+        //     rgb[idx] = unpackUnorm4x8(vertices[curr_node_idx].color);
+        //     rgb[idx] = vec4(curr_rgb, alpha);
+        //     return;
+        // }
+
+        accumulated_rgb += weight * curr_rgb;
+        transmittance = transmittance * (1 - alpha);
+
+        if (transmittance <= transmittanceThreshold) break;
+
+        curr_t = next_t;
+        curr_node_idx = next_node_idx;
+    }
+
+    rgb[idx] = vec4(accumulated_rgb, 1);
+}

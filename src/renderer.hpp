@@ -14,18 +14,13 @@ public:
         float focal_x;
         float focal_y;
         uint32_t startPoint;
+        uint32_t maxSteps;
+        float transmittanceThreshold;
     };
 
-    static_assert(sizeof(UniformData) == 20 * sizeof(int));
-    // static_assert(offsetof(UniformData, T) == 9 * sizeof(int));
-    // static_assert(offsetof(UniformData, width) == 12 * sizeof(int));
-
-
-    struct Ray
-    {
-        alignas(16) glm::vec3 origin;
-        alignas(16) glm::vec3 direction;
-    };
+    static_assert(sizeof(UniformData) == 24 * sizeof(int));
+    static_assert(offsetof(UniformData, T) == 12 * sizeof(int));
+    static_assert(offsetof(UniformData, width) == 15 * sizeof(int));
 
     Renderer(std::shared_ptr<RadFoamVulkanArgs> pArgs,
              std::shared_ptr<RadFoam> pModel,
@@ -42,17 +37,14 @@ private:
     VkCommandBuffer renderCommandBuffer = VK_NULL_HANDLE;
 
     std::shared_ptr<Buffer> uniformBuffer;
-    std::shared_ptr<Buffer> rayBuffer;
     std::shared_ptr<Buffer> rgbBuffer;
 
-    std::shared_ptr<ComputePipeline> getRaysPipeline;
     std::shared_ptr<ComputePipeline> rayTracingPipeline;
 
     VkFence inFlightFence = VK_NULL_HANDLE;
 
     void handleInput();
     void updateUniform();
-    void createGetRaysPipeline();
     void createRayTracingPipeline();
     void recordRenderCommandBuffer();
     void submitRenderCommandBuffer();

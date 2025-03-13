@@ -15,9 +15,10 @@ class RadFoam
 public:
     struct RadFoamVertex
     {
-        alignas(16) glm::vec4 pos_offset;
+        alignas(16) glm::vec4 pos;
         alignas(16) glm::u8vec4 color;
         float density;
+        uint32_t offset;
         alignas(16) std::array<float, 45> sh_coeffs;
     };
 

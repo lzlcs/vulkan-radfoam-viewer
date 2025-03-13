@@ -60,9 +60,15 @@ void RadFoam::parseVertexData(std::istream &is)
     {
         auto &src = rawVertices[i];
         auto &dst = vertices[i];
-        dst.pos_offset = glm::vec4(src.x, src.y, src.z, src.adjacency_offset);
+        dst.pos = glm::vec4(src.x, src.y, src.z, 0);
+        dst.offset = src.adjacency_offset;
         dst.color = glm::u8vec4(src.r, src.g, src.b, 255);
         dst.density = src.density;
+        if (i == 225284) 
+        {
+            std::cout << src.density << ' ' << (int)src.r << ' ' << (int)src.g << ' ' << (int)src.b << std::endl;
+        }
+        
         std::copy_n(src.sh_coeffs, 45, dst.sh_coeffs.begin());
     }
 }
@@ -162,20 +168,20 @@ void AABBTree::buildAABBLeaves()
     vkCmdDispatch(cmd, workGroups, 1, 1);
     context.endSingleTimeCommands(cmd);
 
-    // std::vector<AABB> tmp(1u << numLevels);
-    // aabbBuffer->downloadData(tmp.data(), aabbBuffer->getSize());
+    std::vector<AABB> tmp(1u << numLevels);
+    aabbBuffer->downloadData(tmp.data(), aabbBuffer->getSize());
 
     // int x = 983388;
     // std::cout << x << std::endl;
-    // for (int i = x - 5; i < x; i++)
+    // for (int i = x; i < x + 1; i++)
     // {
-    //     std::cout << tmp[i].min[0] << ' ';
-    //     std::cout << tmp[i].min[1] << ' ';
-    //     std::cout << tmp[i].min[2] << std::endl;
-    //     std::cout << tmp[i].max[0] << ' ';
-    //     std::cout << tmp[i].max[1] << ' ';
-    //     std::cout << tmp[i].max[2] << std::endl;
-    //     // std::cout << pModel->vertices[i * 2].pos_offset[0] << ' ';
+    //     // std::cout << tmp[i].min[0] << ' ';
+    //     // std::cout << tmp[i].min[1] << ' ';
+    //     // std::cout << tmp[i].min[2] << std::endl;
+    //     // std::cout << tmp[i].max[0] << ' ';
+    //     // std::cout << tmp[i].max[1] << ' ';
+    //     // std::cout << tmp[i].max[2] << std::endl;
+    //     std::cout << pModel->vertices[i * 2].offset << ' ';
     //     // std::cout << pModel->vertices[i * 2].pos_offset[1] << ' ';
     //     // std::cout << pModel->vertices[i * 2].pos_offset[2] << std::endl;
     //     // std::cout << pModel->vertices[i * 2 + 1].pos_offset[0] << ' ';
@@ -183,6 +189,11 @@ void AABBTree::buildAABBLeaves()
     //     // std::cout << pModel->vertices[i * 2 + 1].pos_offset[2] << std::endl;
     //     std::cout << std::endl;
     // }
+    // for (int i = 0; i < 100; i++) std::cout << pModel->vertices[i].offset << ' ';
+    // std::cout << std::endl;
+    
+    // for (int i = 0; i < 100; i++) std::cout << pModel->adjacency[i] << ' ';
+    // std::cout << std::endl;
 }
 
 void AABBTree::buildAABBTree()
@@ -297,7 +308,7 @@ uint32_t AABBTree::nearestNeighbor(glm::vec3 &pos)
                 uint32_t pointIdx = point_start_idx + i;
                 pointIdx = std::min(pointIdx, pModel->getNumVertices() - 1);
 
-                auto point = glm::vec3(pModel->getVertices()[pointIdx].pos_offset);
+                auto point = glm::vec3(pModel->getVertices()[pointIdx].pos);
 
                 float dist = glm::length(pos - point);
 

@@ -84,6 +84,7 @@ void initializeWindow(std::shared_ptr<RadFoamVulkanArgs> pArgs)
         context.addInstanceExtension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
     context.addDeviceExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+    context.addDeviceExtension("VK_KHR_shader_non_semantic_info");
 
     // Initialization
     context.createInstance();
