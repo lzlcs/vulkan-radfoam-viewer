@@ -64,10 +64,10 @@ void RadFoam::parseVertexData(std::istream &is)
         dst.offset = src.adjacency_offset;
         dst.color = glm::u8vec4(src.r, src.g, src.b, 255);
         dst.density = src.density;
-        if (i == 225284) 
-        {
-            std::cout << src.density << ' ' << (int)src.r << ' ' << (int)src.g << ' ' << (int)src.b << std::endl;
-        }
+        // if (i == 225284) 
+        // {
+        //     std::cout << src.density << ' ' << (int)src.r << ' ' << (int)src.g << ' ' << (int)src.b << std::endl;
+        // }
         
         std::copy_n(src.sh_coeffs, 45, dst.sh_coeffs.begin());
     }

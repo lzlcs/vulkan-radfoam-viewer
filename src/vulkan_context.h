@@ -34,12 +34,14 @@ public:
     auto getAllocator() const { return this->allocator; }
     auto getDescriptorPool() const { return this->descriptorPool; }
     auto getCommandPool() const { return this->commandPool; }
+    auto getSwapChain() const { return this->swapchain; }
+    auto getSwapChainImage(uint32_t idx) { return this->swapchainImages[idx]; }
 
     VkQueue getQueue(const std::string &type)
     {
         if (type == "compute") return queue_compute;
         else if (type == "graphics") return queue_graphics;
-        else if (type == "presentation") return queue_presentation;
+        else if (type == "present") return queue_presentation;
         return VK_NULL_HANDLE;
     }
 

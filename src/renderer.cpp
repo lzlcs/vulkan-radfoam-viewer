@@ -11,19 +11,15 @@ Renderer::Renderer(std::shared_ptr<RadFoamVulkanArgs> pArgs,
                                              VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                              VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
                                              0, true);
-
-    // VkCommandBufferAllocateInfo allocInfo{};
-    // allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    // allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    // allocInfo.commandPool = context.getCommandPool();
-    // allocInfo.commandBufferCount = 1;
-    // ERR_GUARD_VULKAN(vkAllocateCommandBuffers(context.getDevice(), &allocInfo, &renderCommandBuffer));
-
-    // VkFenceCreateInfo fenceInfo{};
-    // fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    // ERR_GUARD_VULKAN(vkCreateFence(context.getDevice(), &fenceInfo, nullptr, &inFlightFence));
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandPool = context.getCommandPool();
+    allocInfo.commandBufferCount = 1;
+    ERR_GUARD_VULKAN(vkAllocateCommandBuffers(context.getDevice(), &allocInfo, &renderCommandBuffer));
 
     createRayTracingPipeline();
+    createSyncObjects();
 }
 
 Renderer::~Renderer()
@@ -39,13 +35,63 @@ Renderer::~Renderer()
     {
         vkDestroyFence(context.getDevice(), inFlightFence, nullptr);
     }
+
+    if (renderFinishedSemaphore != VK_NULL_HANDLE)
+        vkDestroySemaphore(context.getDevice(), renderFinishedSemaphore, nullptr);
+    if (imageAvailableSemaphore != VK_NULL_HANDLE)
+        vkDestroySemaphore(context.getDevice(), imageAvailableSemaphore, nullptr);
+
 }
 
 void Renderer::render()
 {
+    auto &context = VulkanContext::getContext();
+    vkWaitForFences(context.getDevice(), 1, &inFlightFence, VK_TRUE, UINT64_MAX);
+    vkResetFences(context.getDevice(), 1, &inFlightFence);
+
     handleInput();
     updateUniform();
-    recordRenderCommandBuffer();
+
+    uint32_t imageIndex;
+    vkAcquireNextImageKHR(context.getDevice(), context.getSwapChain(), UINT64_MAX,
+                          imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+
+                          
+    vkResetCommandBuffer(renderCommandBuffer, 0);
+    recordRenderCommandBuffer(imageIndex);
+
+    VkSemaphore waitSemaphores[] = {imageAvailableSemaphore};
+    VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.pWaitSemaphores = waitSemaphores;
+    submitInfo.pWaitDstStageMask = waitStages;
+    
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &renderCommandBuffer;
+
+    VkSemaphore signalSemaphores[] = {renderFinishedSemaphore};
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = signalSemaphores;
+
+
+    ERR_GUARD_VULKAN(vkQueueSubmit(context.getQueue("compute"), 1, &submitInfo, inFlightFence));
+
+    VkPresentInfoKHR presentInfo{};
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = signalSemaphores;
+
+    VkSwapchainKHR swapChains[] = {context.getSwapChain()};
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = swapChains;
+
+    presentInfo.pImageIndices = &imageIndex;
+
+    vkQueuePresentKHR(context.getQueue("present"), &presentInfo);
     // submitRenderCommandBuffer();
 
     // std::vector<Ray> tmp(rayBuffer->getSize() / sizeof(Ray));
@@ -59,16 +105,15 @@ void Renderer::render()
     //     std::cout << tmp[i].direction[0] << ' ' << tmp[i].direction[1] << ' ' << tmp[i].direction[2] << std::endl;
     // }
 
-    std::vector<glm::vec4> tmp(rgbBuffer->getSize() / sizeof(glm::vec4));
+    std::vector<int> tmp(rgbBuffer->getSize() / sizeof(int));
     rgbBuffer->downloadData(tmp.data(), rgbBuffer->getSize());
 
-    int pix = 0;
-    std::cout << tmp.size() << ' ' << pix << std::endl;
-    std::cout << tmp[pix][0] << ' ';
-    std::cout << tmp[pix][1] << ' ';
-    std::cout << tmp[pix][2] << ' ';
-    std::cout << tmp[pix][3] << std::endl;
-
+    // int pix = 0;
+    // std::cout << tmp.size() << ' ' << pix << std::endl;
+    // std::cout << tmp[pix][0] << ' ';
+    // std::cout << tmp[pix][1] << ' ';
+    // std::cout << tmp[pix][2] << ' ';
+    // std::cout << tmp[pix][3] << std::endl;
 }
 
 void Renderer::handleInput()
@@ -109,7 +154,7 @@ void Renderer::createRayTracingPipeline()
 {
     auto &context = VulkanContext::getContext();
     auto shader = std::make_shared<Shader>("src/shader/spv/ray_tracing.comp.spv");
-    auto rgbBufferSize = pArgs->windowHeight * pArgs->windowWidth * sizeof(glm::vec4);
+    auto rgbBufferSize = pArgs->windowHeight * pArgs->windowWidth * sizeof(int);
 
     rgbBuffer = std::make_shared<Buffer>(rgbBufferSize,
                                          VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
@@ -140,46 +185,88 @@ void Renderer::createRayTracingPipeline()
     rayTracingPipeline->addDescriptorSet(outputSet);
 }
 
-void Renderer::recordRenderCommandBuffer()
+void Renderer::createSyncObjects()
+{
+    auto device = VulkanContext::getContext().getDevice();
+    VkSemaphoreCreateInfo semaphoreInfo{};
+    semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+    VkFenceCreateInfo fenceInfo{};
+    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+    ERR_GUARD_VULKAN(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphore));
+    ERR_GUARD_VULKAN(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphore));
+    ERR_GUARD_VULKAN(vkCreateFence(device, &fenceInfo, nullptr, &inFlightFence));
+}
+
+void Renderer::recordRenderCommandBuffer(uint32_t imageIndex)
 {
     auto &context = VulkanContext::getContext();
 
-    auto cmd = context.beginSingleTimeCommands();
-    auto numGroups = (pArgs->windowHeight * pArgs->windowWidth + 255) / 256;
-    rayTracingPipeline->bindDescriptorSets(cmd);
-    vkCmdDispatch(cmd, numGroups, 1, 1);
-    context.endSingleTimeCommands(cmd);
-
-
-    // vkResetCommandBuffer(renderCommandBuffer, 0);
-    // VkCommandBufferBeginInfo beginInfo{};
-    // beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    // vkBeginCommandBuffer(renderCommandBuffer, &beginInfo);
-
+    // auto cmd = context.beginSingleTimeCommands();
     // auto numGroups = (pArgs->windowHeight * pArgs->windowWidth + 255) / 256;
-    // rayTracingPipeline->bindDescriptorSets(renderCommandBuffer);
-    // vkCmdDispatch(renderCommandBuffer, numGroups, 1, 1);
+    // rayTracingPipeline->bindDescriptorSets(cmd);
+    // vkCmdDispatch(cmd, numGroups, 1, 1);
+    // context.endSingleTimeCommands(cmd);
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    vkBeginCommandBuffer(renderCommandBuffer, &beginInfo);
 
-    // VkMemoryBarrier barrier = {
-    //     .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-    //     .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-    //     .dstAccessMask = VK_ACCESS_SHADER_READ_BIT};
-    // vkCmdPipelineBarrier(renderCommandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-    //                      0, 1, &barrier, 0, nullptr, 0, nullptr);
+    auto numGroups = (pArgs->windowHeight * pArgs->windowWidth + 255) / 256;
+    rayTracingPipeline->bindDescriptorSets(renderCommandBuffer);
+    vkCmdDispatch(renderCommandBuffer, numGroups, 1, 1);
 
-    // vkEndCommandBuffer(renderCommandBuffer);
+
+    VkImageMemoryBarrier barrier{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .srcAccessMask = VK_ACCESS_MEMORY_READ_BIT,
+        .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT, 
+        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        .image = context.getSwapChainImage(imageIndex),
+        .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
+    };
+    
+    vkCmdPipelineBarrier(
+        renderCommandBuffer,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        0, 0, nullptr, 0, nullptr, 1, &barrier
+    );
+
+    VkBufferImageCopy region{
+        .bufferOffset = 0,
+        .bufferRowLength = 0,
+        .bufferImageHeight = 0,
+        .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+        .imageOffset = {0, 0, 0},
+        .imageExtent = {pArgs->windowWidth, pArgs->windowHeight, 1}
+    };
+    
+    vkCmdCopyBufferToImage(
+        renderCommandBuffer,
+        rgbBuffer->getBuffer(),
+        context.getSwapChainImage(imageIndex),
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        1, &region
+    );
+
+    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+
+    vkCmdPipelineBarrier(
+        renderCommandBuffer,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+        0, 0, nullptr, 0, nullptr, 1, &barrier
+    );
+
+    vkEndCommandBuffer(renderCommandBuffer);
 }
 
 void Renderer::submitRenderCommandBuffer()
 {
-    auto &context = VulkanContext::getContext();
-    VkSubmitInfo submitInfo{};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &renderCommandBuffer;
-    vkResetFences(context.getDevice(), 1, &inFlightFence);
-
-    ERR_GUARD_VULKAN(vkQueueSubmit(context.getQueue("compute"), 1, &submitInfo, inFlightFence));
-
-    vkWaitForFences(context.getDevice(), 1, &inFlightFence, VK_TRUE, UINT64_MAX);
 }

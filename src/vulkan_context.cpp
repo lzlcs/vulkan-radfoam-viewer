@@ -186,9 +186,9 @@ void VulkanContext::createSwapChain(VkSwapchainCreateFlagsKHR flags)
     swapchainCreateInfo.imageArrayLayers = 1;
     swapchainCreateInfo.preTransform = surfaceCapabilities.currentTransform;
     swapchainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
-    swapchainCreateInfo.imageFormat = VK_FORMAT_B8G8R8A8_SRGB;
+    swapchainCreateInfo.imageFormat = VK_FORMAT_R8G8B8A8_UNORM;
     swapchainCreateInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
     swapchainCreateInfo.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
 
@@ -249,6 +249,7 @@ void VulkanContext::createSwapChainInternal()
     imageViewCreateInfo.format = swapchainCreateInfo.imageFormat;
     imageViewCreateInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
 
+    // std::cout << swapchainImageCount << std::endl;
     for (size_t i = 0; i < swapchainImageCount; i++)
     {
         imageViewCreateInfo.image = swapchainImages[i];

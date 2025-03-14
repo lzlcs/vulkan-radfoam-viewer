@@ -42,10 +42,13 @@ private:
     std::shared_ptr<ComputePipeline> rayTracingPipeline;
 
     VkFence inFlightFence = VK_NULL_HANDLE;
+    VkSemaphore imageAvailableSemaphore;
+    VkSemaphore renderFinishedSemaphore;
 
     void handleInput();
     void updateUniform();
     void createRayTracingPipeline();
-    void recordRenderCommandBuffer();
+    void createSyncObjects();
+    void recordRenderCommandBuffer(uint32_t imageIndex);
     void submitRenderCommandBuffer();
 };

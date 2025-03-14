@@ -33,7 +33,7 @@ layout(std430, set = 0, binding = 2) readonly buffer Adjacency {
 };
 
 layout(std430, set = 1, binding = 0) writeonly buffer RGB {
-    vec4 rgb[];
+    uint rgb[];
 };
 
 layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
@@ -184,5 +184,5 @@ void main() {
         curr_node_idx = next_node_idx;
     }
 
-    rgb[idx] = vec4(accumulated_rgb, 1);
+    rgb[idx] = packUnorm4x8(vec4(accumulated_rgb, 1));
 }
