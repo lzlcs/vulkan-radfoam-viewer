@@ -105,15 +105,24 @@ void Renderer::render()
     //     std::cout << tmp[i].direction[0] << ' ' << tmp[i].direction[1] << ' ' << tmp[i].direction[2] << std::endl;
     // }
 
-    std::vector<int> tmp(rgbBuffer->getSize() / sizeof(int));
+    
+    // int pix = 623 * pArgs->windowWidth + 131;
+    int pix = 177 * pArgs->windowWidth + 454;
+
+    // std::vector<uint8_t> tmp(rgbBuffer->getSize() * 4);
+    // rgbBuffer->downloadData(tmp.data(), rgbBuffer->getSize());
+
+    // std::cout << tmp.size() << ' ' << pix << std::endl;
+    // std::cout << (int)tmp[pix * 4] << ' ';
+    // std::cout << (int)tmp[pix * 4 + 1] << ' ';
+    // std::cout << (int)tmp[pix * 4 + 2] << ' ';
+    // std::cout << (int)tmp[pix * 4 + 3] << std::endl;
+
+    
+    std::vector<uint32_t> tmp(rgbBuffer->getSize());
     rgbBuffer->downloadData(tmp.data(), rgbBuffer->getSize());
 
-    // int pix = 0;
-    // std::cout << tmp.size() << ' ' << pix << std::endl;
-    // std::cout << tmp[pix][0] << ' ';
-    // std::cout << tmp[pix][1] << ' ';
-    // std::cout << tmp[pix][2] << ' ';
-    // std::cout << tmp[pix][3] << std::endl;
+    std::cout << tmp[pix] << std::endl;
 }
 
 void Renderer::handleInput()

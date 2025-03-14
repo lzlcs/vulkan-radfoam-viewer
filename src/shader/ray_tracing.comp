@@ -134,34 +134,56 @@ void main() {
         for (int i = 0; i < num_faces; i++)
         {
             int node_idx = adjacency[adjacency_begin + i];
+
             vec3 face_normal = vec3(vertices[node_idx].pos - vertices[curr_node_idx].pos);
             vec3 face_origin = vertices[curr_node_idx].pos + face_normal / 2;
 
             float delta_distance = dot(face_normal, ray_direction);
-            if (delta_distance == 0.0) continue;
+            if (delta_distance <= 1e-6) continue;
 
             float t = dot((face_origin - ray_origin), face_normal) / delta_distance;
 
+            // if (t < next_t && t > curr_t + 1e-5) next_t = t, next_node_idx = node_idx;
+            if (t < next_t) next_t = t, next_node_idx = node_idx;
 
-            if (t < next_t && t > curr_t) next_t = t, next_node_idx = node_idx;
+            // if (n == 20 && node_idx == 754691)
+            // {
+            //     // rgb[idx] = next_node_idx;
+            //     rgb[idx] = int(curr_t * 1000000);
+            //     return;
+            // }
+
         }
 
         if (next_node_idx == -1) break;
 
 
+        // if (n == 20)
+        // {
+        //     rgb[idx] = next_node_idx;
+        //     // rgb[idx] = int(next_t * 1000000);
+        //     return;
+        // }
 
-        // Alpha Composite
-        float density = vertices[curr_node_idx].density;
+        if (next_t > curr_t)
+        {
+            // Alpha Composite
+            float density = vertices[curr_node_idx].density;
 
-        float alpha = 1 - exp(-density * (next_t - curr_t));
-        float weight = alpha * transmittance;
+            float alpha = 1 - exp(-density * (next_t - curr_t));
+            float weight = alpha * transmittance;
 
 
-        vec3 curr_rgb = (alpha > 1e-6) ? get_rgb_from_sh(curr_node_idx, ray_direction)
-                                       : vec3(0, 0, 0);
-        
+            vec3 curr_rgb = (alpha > 1e-6) ? get_rgb_from_sh(curr_node_idx, ray_direction)
+                                           : vec3(0, 0, 0);
+                                        
+            accumulated_rgb += weight * curr_rgb;
+            transmittance = transmittance * (1 - alpha);
 
-        
+            if (transmittance <= transmittanceThreshold) break;
+        }
+
+        // debugPrintfEXT("curr_node: %d ", curr_node_idx);
         // if (n == maxSteps - 1)
         // {
         //     rgb[idx] = vec4(vertices[curr_node_idx].sh_coeffs[0],
@@ -175,14 +197,11 @@ void main() {
         //     return;
         // }
 
-        accumulated_rgb += weight * curr_rgb;
-        transmittance = transmittance * (1 - alpha);
 
-        if (transmittance <= transmittanceThreshold) break;
-
-        curr_t = next_t;
+        curr_t = max(curr_t, next_t);
         curr_node_idx = next_node_idx;
     }
 
     rgb[idx] = packUnorm4x8(vec4(accumulated_rgb, 1));
+    // rgb[idx] = curr_node_idx;
 }
