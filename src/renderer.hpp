@@ -2,6 +2,8 @@
 #include "compute_pipeline.hpp"
 #include "radfoam.hpp"
 
+class GLFWwindow;
+
 class Renderer
 {
 public:
@@ -30,6 +32,9 @@ public:
     void render();
 
 private:
+    float moveSpeed = 0.05f;
+    float rotateSpeed = glm::radians(1.0f);
+
     std::shared_ptr<RadFoamVulkanArgs> pArgs;
     std::shared_ptr<RadFoam> pModel;
     std::shared_ptr<AABBTree> pAABB;
@@ -37,13 +42,14 @@ private:
     VkCommandBuffer renderCommandBuffer = VK_NULL_HANDLE;
 
     std::shared_ptr<Buffer> uniformBuffer;
-    std::shared_ptr<Buffer> rgbBuffer;
 
     std::shared_ptr<ComputePipeline> rayTracingPipeline;
 
     VkFence inFlightFence = VK_NULL_HANDLE;
     VkSemaphore imageAvailableSemaphore;
     VkSemaphore renderFinishedSemaphore;
+
+    UniformData data;
 
     void handleInput();
     void updateUniform();

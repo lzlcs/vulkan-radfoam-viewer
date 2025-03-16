@@ -1,3 +1,4 @@
+#pragma once
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include "vulkan_context.h"
@@ -7,12 +8,9 @@
 #include <sstream>
 #include <format>
 
-GLFWwindow *pWindow;
-GLFWmonitor *pMonitor;
-const char *windowTitle = "RadFoam Vulakn Viewer";
-
 void TitleFps()
 {
+    auto &context = VulkanContext::getContext();
     static double time0 = glfwGetTime();
     static double time1;
     static double dt;
@@ -23,8 +21,8 @@ void TitleFps()
     if ((dt = time1 - time0) >= 1)
     {
         info.precision(1);
-        info << windowTitle << "    " << std::fixed << dframe / dt << " FPS";
-        glfwSetWindowTitle(pWindow, info.str().c_str());
+        info << context.getWindowTitle() << "    " << std::fixed << dframe / dt << " FPS";
+        glfwSetWindowTitle(context.getWindow(), info.str().c_str());
         info.str("");
         time0 = time1;
         dframe = 0;
@@ -34,6 +32,7 @@ void TitleFps()
 VkResult createGLFW(std::shared_ptr<RadFoamVulkanArgs> pArgs)
 {
     // Initialize Window
+    auto &context = VulkanContext::getContext();
     if (!glfwInit())
     {
         glfwTerminate();
@@ -41,12 +40,12 @@ VkResult createGLFW(std::shared_ptr<RadFoamVulkanArgs> pArgs)
     }
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, pArgs->isResizable);
-    pMonitor = glfwGetPrimaryMonitor();
-    const GLFWvidmode *pMode = glfwGetVideoMode(pMonitor);
+    context.setMonitor(glfwGetPrimaryMonitor());
+    const GLFWvidmode *pMode = glfwGetVideoMode(context.getMonitor());
 
-    pWindow = pArgs->fullScreen ? glfwCreateWindow(pMode->width, pMode->height, windowTitle, pMonitor, nullptr)
-                                : glfwCreateWindow(pArgs->windowWidth, pArgs->windowHeight, windowTitle, nullptr, nullptr);
-    if (!pWindow)
+    context.setWindow(pArgs->fullScreen ? glfwCreateWindow(pMode->width, pMode->height, context.getWindowTitle(), context.getMonitor(), nullptr)
+                                        : glfwCreateWindow(pArgs->windowWidth, pArgs->windowHeight, context.getWindowTitle(), nullptr, nullptr));
+    if (!context.getWindow())
     {
         glfwTerminate();
         return VK_ERROR_INITIALIZATION_FAILED;
@@ -67,7 +66,7 @@ VkResult getGLFWInstanceExtensions(uint32_t *extensionCount, const char ***exten
 
 void initializeWindow(std::shared_ptr<RadFoamVulkanArgs> pArgs)
 {
-    
+
     ERR_GUARD_VULKAN(createGLFW(pArgs));
     auto &context = VulkanContext::getContext();
     context.setArgs(pArgs);
@@ -89,7 +88,7 @@ void initializeWindow(std::shared_ptr<RadFoamVulkanArgs> pArgs)
     // Initialization
     context.createInstance();
     VkSurfaceKHR surface = VK_NULL_HANDLE;
-    ERR_GUARD_VULKAN(glfwCreateWindowSurface(context.getInstance(), pWindow, nullptr, &surface));
+    ERR_GUARD_VULKAN(glfwCreateWindowSurface(context.getInstance(), context.getWindow(), nullptr, &surface));
     context.setSurface(surface);
 
     if (pArgs->validation)
@@ -104,7 +103,6 @@ void initializeWindow(std::shared_ptr<RadFoamVulkanArgs> pArgs)
     context.createVMAAllocator();
     // context.setModel(std::make_shared<RadFoam>(pArgs));
     // context.getModel()->loadRadFoam();
-    
 }
 
 void terminateWindow()

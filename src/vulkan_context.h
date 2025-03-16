@@ -9,6 +9,9 @@
 #include <format>
 #include "arguments.hpp"
 
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
+
 class RadFoam;
 
 class VulkanContext
@@ -38,6 +41,9 @@ public:
     auto getSwapChainImage(uint32_t idx) { return this->swapchainImages[idx]; }
     auto getSwapChainImageView(uint32_t idx) { return this->swapchainImageViews[idx]; }
     auto getSwapChainImageCount() { return this->swapchainImages.size(); }
+    auto getWindow() const { return this->pWindow; }
+    auto getMonitor() const { return this->pMonitor; }
+    auto getWindowTitle() const { return this->windowTitle; }
 
     VkQueue getQueue(const std::string &type)
     {
@@ -50,6 +56,8 @@ public:
     void setArgs(auto pArgs) { this->pArgs = pArgs; }
     // void setModel(std::shared_ptr<RadFoam> pModel) { this->pModel = pModel; }
     void setSurface(VkSurfaceKHR surface) { this->surface = surface; }
+    void setMonitor(GLFWmonitor *pMonitor) { this->pMonitor = pMonitor; }
+    void setWindow(GLFWwindow *pWindow) { this->pWindow = pWindow; }
 
     void addInstanceLayer(const char *layerName) { instanceLayers.push_back(layerName); }
     void addInstanceExtension(const char *extensionName) { instanceExtensions.push_back(extensionName); }
@@ -111,4 +119,8 @@ private:
     std::vector<void (*)()> callbacksDestroySwapchain;
     std::vector<void (*)()> callbacksCreateDevice;
     std::vector<void (*)()> callbacksDestroyDevice;
+
+    GLFWwindow *pWindow = nullptr;
+    GLFWmonitor *pMonitor = nullptr;
+    const char *windowTitle = "RadFoam Vulakn Viewer";    
 };

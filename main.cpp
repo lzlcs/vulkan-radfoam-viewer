@@ -21,11 +21,11 @@ int main(int argc, char *argv[])
     // std::cout << pAABB->aabbTree[(1 << pAABB->numLevels) - 2].max[2] << std::endl;
 
     auto renderer = std::make_shared<Renderer>(pArgs, pModel, pAABB);
-    
+    auto &context = VulkanContext::getContext();
         
     // renderer->render();
 
-    while (!glfwWindowShouldClose(pWindow))
+    while (!glfwWindowShouldClose(context.getWindow()))
     {
         glfwPollEvents();
         renderer->render();

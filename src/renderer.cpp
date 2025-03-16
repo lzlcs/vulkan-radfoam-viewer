@@ -1,5 +1,10 @@
 #include "renderer.hpp"
 #include "radfoam.hpp"
+// #include "GLFWGeneral.h"
+// #include <glm/ext/matrix_transform.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/orthonormalize.hpp>
 
 Renderer::Renderer(std::shared_ptr<RadFoamVulkanArgs> pArgs,
                    std::shared_ptr<RadFoam> pModel,
@@ -17,6 +22,20 @@ Renderer::Renderer(std::shared_ptr<RadFoamVulkanArgs> pArgs,
     allocInfo.commandPool = context.getCommandPool();
     allocInfo.commandBufferCount = 1;
     ERR_GUARD_VULKAN(vkAllocateCommandBuffers(context.getDevice(), &allocInfo, &renderCommandBuffer));
+
+    data.R = glm::mat3x4(
+        {0.08240976184606552, 0.6311448812484741, -0.771274745464325, 0},
+        {-0.6168570518493652, 0.6401463150978088, 0.45793023705482483, 0},
+        {0.7827489972114563, 0.43802836537361145, 0.4420804977416992, 0});
+    data.T = glm::vec3(-3.1629207134246826, -0.6483269333839417, -0.17025022208690643);
+
+    data.startPoint = pAABB->nearestNeighbor(data.T);
+    data.focal_x = 805.67529296875;
+    data.focal_y = 805.67529296875;
+    data.width = pArgs->windowWidth;
+    data.height = pArgs->windowHeight;
+    data.maxSteps = 1024;
+    data.transmittanceThreshold = 0.001f;
 
     createRayTracingPipeline();
     createSyncObjects();
@@ -49,7 +68,6 @@ void Renderer::render()
     vkResetFences(context.getDevice(), 1, &inFlightFence);
 
     handleInput();
-    updateUniform();
 
     uint32_t imageIndex;
     vkAcquireNextImageKHR(context.getDevice(), context.getSwapChain(), UINT64_MAX,
@@ -120,29 +138,87 @@ void Renderer::render()
     // std::cout << tmp[pix] << std::endl;
 }
 
-void Renderer::handleInput()
-{
+void Renderer::handleInput() {
+    auto& context = VulkanContext::getContext();
+    auto pWindow = context.getWindow();
+
+    glm::vec3 right = glm::vec3(data.R[0]);
+    glm::vec3 up = glm::vec3(data.R[1]);
+    glm::vec3 front = glm::vec3(data.R[2]);
+
+
+    if (glfwGetKey(pWindow, GLFW_KEY_W) == GLFW_PRESS) data.T += front * moveSpeed;
+    if (glfwGetKey(pWindow, GLFW_KEY_S) == GLFW_PRESS) data.T -= front * moveSpeed;
+    if (glfwGetKey(pWindow, GLFW_KEY_A) == GLFW_PRESS) data.T -= right * moveSpeed;
+    if (glfwGetKey(pWindow, GLFW_KEY_D) == GLFW_PRESS) data.T += right * moveSpeed;
+    if (glfwGetKey(pWindow, GLFW_KEY_Q) == GLFW_PRESS) data.T += up * moveSpeed;
+    if (glfwGetKey(pWindow, GLFW_KEY_E) == GLFW_PRESS) data.T -= up * moveSpeed;
+    
+    // 旋转控制
+    glm::mat3 currentR = data.R;
+    bool rotated = false;
+    
+    // Yaw（左右摇头）
+    if (glfwGetKey(pWindow, GLFW_KEY_J) == GLFW_PRESS) { // 左转
+        currentR = glm::rotate(glm::mat4(1.0f), -rotateSpeed, up) * glm::mat4(currentR);
+        rotated = true;
+    }
+    if (glfwGetKey(pWindow, GLFW_KEY_L) == GLFW_PRESS) { // 右转
+        currentR = glm::rotate(glm::mat4(1.0f), rotateSpeed, up) * glm::mat4(currentR);
+        rotated = true;
+    }
+
+    // Pitch（上下点头）
+    if (glfwGetKey(pWindow, GLFW_KEY_I) == GLFW_PRESS) { // 上仰
+        currentR = glm::rotate(glm::mat4(1.0f), rotateSpeed, right) * glm::mat4(currentR);
+        rotated = true;
+    }
+    if (glfwGetKey(pWindow, GLFW_KEY_K) == GLFW_PRESS) { // 下俯
+        currentR = glm::rotate(glm::mat4(1.0f), -rotateSpeed, right) * glm::mat4(currentR);
+        rotated = true;
+    }
+
+    // Roll（机身旋转）
+    if (glfwGetKey(pWindow, GLFW_KEY_U) == GLFW_PRESS) { // 逆时针
+        currentR = glm::rotate(glm::mat4(1.0f), -rotateSpeed, front) * glm::mat4(currentR);
+        rotated = true;
+    }
+    if (glfwGetKey(pWindow, GLFW_KEY_O) == GLFW_PRESS) { // 顺时针
+        currentR = glm::rotate(glm::mat4(1.0f), rotateSpeed, front) * glm::mat4(currentR);
+        rotated = true;
+    }
+
+    if (rotated) {
+        // 保持正交性并更新旋转矩阵
+        currentR = glm::orthonormalize(glm::mat3(currentR));
+        data.R = glm::mat3x4(
+            glm::vec4(currentR[0], 0.0f),
+            glm::vec4(currentR[1], 0.0f),
+            glm::vec4(currentR[2], 0.0f)
+        );
+    }
+
+    updateUniform();
 }
 
 void Renderer::updateUniform()
 {
-    UniformData data;
-
-    data.R = glm::mat3x4(
-        {0.08240976184606552, 0.6311448812484741, -0.771274745464325, 0},
-        {-0.6168570518493652, 0.6401463150978088, 0.45793023705482483, 0},
-        {0.7827489972114563, 0.43802836537361145, 0.4420804977416992, 0});
-    data.T = glm::vec3(-3.1629207134246826, -0.6483269333839417, -0.17025022208690643);
-
-    data.startPoint = pAABB->nearestNeighbor(data.T);
-    data.focal_x = 805.67529296875;
-    data.focal_y = 805.67529296875;
-    data.width = pArgs->windowWidth;
-    data.height = pArgs->windowHeight;
-    data.maxSteps = 1024;
-    data.transmittanceThreshold = 0.001f;
 
     // std::cout << "start point: " << data.startPoint << std::endl;
+
+    // data.R = glm::mat3x4(
+    //     {0.08240976184606552, 0.6311448812484741, -0.771274745464325, 0},
+    //     {-0.6168570518493652, 0.6401463150978088, 0.45793023705482483, 0},
+    //     {0.7827489972114563, 0.43802836537361145, 0.4420804977416992, 0});
+    // data.T = glm::vec3(-3.1629207134246826, -0.6483269333839417, -0.17025022208690643);
+
+    // data.startPoint = pAABB->nearestNeighbor(data.T);
+    // data.focal_x = 805.67529296875;
+    // data.focal_y = 805.67529296875;
+    // data.width = pArgs->windowWidth;
+    // data.height = pArgs->windowHeight;
+    // data.maxSteps = 1024;
+    // data.transmittanceThreshold = 0.001f;
 
     uniformBuffer->uploadData(&data, sizeof(UniformData));
 
@@ -159,11 +235,6 @@ void Renderer::createRayTracingPipeline()
     auto &context = VulkanContext::getContext();
     auto shader = std::make_shared<Shader>("src/shader/spv/ray_tracing.comp.spv");
     auto rgbBufferSize = pArgs->windowHeight * pArgs->windowWidth * sizeof(int);
-
-    rgbBuffer = std::make_shared<Buffer>(rgbBufferSize,
-                                         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                                             VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                                         VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE);
     // Input Bindings
     std::vector<DescriptorSet::BindingInfo> inputBindings = {
         {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT},
@@ -220,7 +291,7 @@ void Renderer::recordRenderCommandBuffer(uint32_t imageIndex)
 {
     auto &context = VulkanContext::getContext();
 
-    
+
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     vkBeginCommandBuffer(renderCommandBuffer, &beginInfo);
