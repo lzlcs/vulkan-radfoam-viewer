@@ -36,6 +36,8 @@ public:
     auto getCommandPool() const { return this->commandPool; }
     auto getSwapChain() const { return this->swapchain; }
     auto getSwapChainImage(uint32_t idx) { return this->swapchainImages[idx]; }
+    auto getSwapChainImageView(uint32_t idx) { return this->swapchainImageViews[idx]; }
+    auto getSwapChainImageCount() { return this->swapchainImages.size(); }
 
     VkQueue getQueue(const std::string &type)
     {

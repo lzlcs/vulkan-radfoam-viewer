@@ -23,14 +23,14 @@ int main(int argc, char *argv[])
     auto renderer = std::make_shared<Renderer>(pArgs, pModel, pAABB);
     
         
-    renderer->render();
+    // renderer->render();
 
-    // while (!glfwWindowShouldClose(pWindow))
-    // {
-    //     glfwPollEvents();
-    //     renderer->render();
-    //     TitleFps();
-    // }   
+    while (!glfwWindowShouldClose(pWindow))
+    {
+        glfwPollEvents();
+        renderer->render();
+        TitleFps();
+    }   
 
     terminateWindow();
     return 0;

@@ -40,7 +40,6 @@ Renderer::~Renderer()
         vkDestroySemaphore(context.getDevice(), renderFinishedSemaphore, nullptr);
     if (imageAvailableSemaphore != VK_NULL_HANDLE)
         vkDestroySemaphore(context.getDevice(), imageAvailableSemaphore, nullptr);
-
 }
 
 void Renderer::render()
@@ -56,7 +55,6 @@ void Renderer::render()
     vkAcquireNextImageKHR(context.getDevice(), context.getSwapChain(), UINT64_MAX,
                           imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
 
-                          
     vkResetCommandBuffer(renderCommandBuffer, 0);
     recordRenderCommandBuffer(imageIndex);
 
@@ -67,7 +65,7 @@ void Renderer::render()
     submitInfo.waitSemaphoreCount = 1;
     submitInfo.pWaitSemaphores = waitSemaphores;
     submitInfo.pWaitDstStageMask = waitStages;
-    
+
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &renderCommandBuffer;
@@ -75,7 +73,6 @@ void Renderer::render()
     VkSemaphore signalSemaphores[] = {renderFinishedSemaphore};
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = signalSemaphores;
-
 
     ERR_GUARD_VULKAN(vkQueueSubmit(context.getQueue("compute"), 1, &submitInfo, inFlightFence));
 
@@ -105,9 +102,8 @@ void Renderer::render()
     //     std::cout << tmp[i].direction[0] << ' ' << tmp[i].direction[1] << ' ' << tmp[i].direction[2] << std::endl;
     // }
 
-    
     // int pix = 623 * pArgs->windowWidth + 131;
-    int pix = 177 * pArgs->windowWidth + 454;
+    // int pix = 177 * pArgs->windowWidth + 454;
 
     // std::vector<uint8_t> tmp(rgbBuffer->getSize() * 4);
     // rgbBuffer->downloadData(tmp.data(), rgbBuffer->getSize());
@@ -118,11 +114,10 @@ void Renderer::render()
     // std::cout << (int)tmp[pix * 4 + 2] << ' ';
     // std::cout << (int)tmp[pix * 4 + 3] << std::endl;
 
-    
-    std::vector<uint32_t> tmp(rgbBuffer->getSize());
-    rgbBuffer->downloadData(tmp.data(), rgbBuffer->getSize());
+    // std::vector<uint32_t> tmp(rgbBuffer->getSize());
+    // rgbBuffer->downloadData(tmp.data(), rgbBuffer->getSize());
 
-    std::cout << tmp[pix] << std::endl;
+    // std::cout << tmp[pix] << std::endl;
 }
 
 void Renderer::handleInput()
@@ -180,18 +175,30 @@ void Renderer::createRayTracingPipeline()
     inputSet->bindBuffers(1, {pModel->getVertexBuffer()->getBuffer()});
     inputSet->bindBuffers(2, {pModel->getAdjacencyBuffer()->getBuffer()});
 
-    // Output Bindings
-    std::vector<DescriptorSet::BindingInfo> outputBindings = {
-        {0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT}};
-    auto outputSet = std::make_shared<DescriptorSet>(outputBindings);
-    outputSet->bindBuffers(0, {rgbBuffer->getBuffer()});
+    std::vector<VkDescriptorSetLayout> descriptorSetLayouts{inputSet->getDescriptorSetLayout()};
+    std::vector<std::shared_ptr<DescriptorSet>> outputSets;
+
+    // Output Bindings for Every Swapchain Image
+    auto imageCounts = context.getSwapChainImageCount();
+    for (int i = 0; i < imageCounts; i++)
+    {
+        std::vector<DescriptorSet::BindingInfo> outputBindings = {
+            {0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT}};
+        auto outputSet = std::make_shared<DescriptorSet>(outputBindings);
+        // outputSet->bindBuffers(0, {rgbBuffer->getBuffer()});
+        outputSet->bindImages(0, {context.getSwapChainImageView(i)}, VK_IMAGE_LAYOUT_GENERAL);
+
+        outputSets.push_back(outputSet);
+        descriptorSetLayouts.push_back(outputSet->getDescriptorSetLayout());
+    }
 
     // Create Pipeline
-    std::vector<VkDescriptorSetLayout> descriptorSetLayouts{
-        inputSet->getDescriptorSetLayout(), outputSet->getDescriptorSetLayout()};
     rayTracingPipeline = std::make_shared<ComputePipeline>(shader->shaderModule, descriptorSetLayouts);
     rayTracingPipeline->addDescriptorSet(inputSet);
-    rayTracingPipeline->addDescriptorSet(outputSet);
+    for (int i = 0; i < imageCounts; i++)
+    {
+        rayTracingPipeline->addDescriptorSet(outputSets[i]);
+    }
 }
 
 void Renderer::createSyncObjects()
@@ -213,69 +220,43 @@ void Renderer::recordRenderCommandBuffer(uint32_t imageIndex)
 {
     auto &context = VulkanContext::getContext();
 
-    // auto cmd = context.beginSingleTimeCommands();
-    // auto numGroups = (pArgs->windowHeight * pArgs->windowWidth + 255) / 256;
-    // rayTracingPipeline->bindDescriptorSets(cmd);
-    // vkCmdDispatch(cmd, numGroups, 1, 1);
-    // context.endSingleTimeCommands(cmd);
+    
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     vkBeginCommandBuffer(renderCommandBuffer, &beginInfo);
+    
+    VkImageMemoryBarrier barrier{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .srcAccessMask = 0,
+        .dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .image = context.getSwapChainImage(imageIndex),
+        .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}};
+
+    vkCmdPipelineBarrier(
+        renderCommandBuffer,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        0, 0, nullptr, 0, nullptr, 1, &barrier);
+
 
     auto numGroups = (pArgs->windowHeight * pArgs->windowWidth + 255) / 256;
-    rayTracingPipeline->bindDescriptorSets(renderCommandBuffer);
+    // std::cout << imageIndex << std::endl;
+    rayTracingPipeline->bindDescriptorSets(renderCommandBuffer, {0, imageIndex + 1});
     vkCmdDispatch(renderCommandBuffer, numGroups, 1, 1);
 
 
-    VkImageMemoryBarrier barrier{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .srcAccessMask = VK_ACCESS_MEMORY_READ_BIT,
-        .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT, 
-        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .image = context.getSwapChainImage(imageIndex),
-        .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
-    };
-    
-    vkCmdPipelineBarrier(
-        renderCommandBuffer,
-        VK_PIPELINE_STAGE_TRANSFER_BIT,
-        VK_PIPELINE_STAGE_TRANSFER_BIT,
-        0, 0, nullptr, 0, nullptr, 1, &barrier
-    );
-
-    VkBufferImageCopy region{
-        .bufferOffset = 0,
-        .bufferRowLength = 0,
-        .bufferImageHeight = 0,
-        .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-        .imageOffset = {0, 0, 0},
-        .imageExtent = {pArgs->windowWidth, pArgs->windowHeight, 1}
-    };
-    
-    vkCmdCopyBufferToImage(
-        renderCommandBuffer,
-        rgbBuffer->getBuffer(),
-        context.getSwapChainImage(imageIndex),
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        1, &region
-    );
-
-    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
     barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
     barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
 
     vkCmdPipelineBarrier(
         renderCommandBuffer,
-        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-        0, 0, nullptr, 0, nullptr, 1, &barrier
-    );
+        0, 0, nullptr, 0, nullptr, 1, &barrier);
 
     vkEndCommandBuffer(renderCommandBuffer);
-}
-
-void Renderer::submitRenderCommandBuffer()
-{
 }

@@ -76,6 +76,25 @@ public:
         vkUpdateDescriptorSets(VulkanContext::getContext().getDevice(), 1, &write, 0, nullptr);
     }
 
+    void bindImages(uint32_t binding, const std::vector<VkImageView> &views, VkImageLayout layout)
+    {
+        VkDescriptorImageInfo imageInfo{};
+        imageInfo.imageLayout = layout;
+
+        std::vector<VkWriteDescriptorSet> writes;
+        for (auto &view : views)
+        {
+            imageInfo.imageView = view;
+            writes.push_back({.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                              .dstSet = set,
+                              .dstBinding = binding,
+                              .descriptorCount = 1,
+                              .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                              .pImageInfo = &imageInfo});
+        }
+        vkUpdateDescriptorSets(VulkanContext::getContext().getDevice(), writes.size(), writes.data(), 0, nullptr);
+    }
+
     auto getDescriptorSetLayout() const { return this->layout; }
     auto getDescriptorSet() const { return this->set; }
 
@@ -136,15 +155,32 @@ public:
     }
 
     void bindDescriptorSets(VkCommandBuffer commandBuffer,
+                            const std::vector<uint32_t> &bindSetIndexs = {},
                             const std::vector<uint32_t> &dynamicOffsets = {})
     {
+
         // std::cout << commandBuffer <<std::endl;
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
-        // std::cout << 1 << std::endl;
-        vkCmdBindDescriptorSets(
-            commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, layout, 0,
-            static_cast<uint32_t>(descriptorSets.size()), descriptorSets.empty() ? nullptr : descriptorSets.data(),
-            static_cast<uint32_t>(dynamicOffsets.size()), dynamicOffsets.empty() ? nullptr : dynamicOffsets.data());
+
+        std::vector<VkDescriptorSet> sets;
+        for (auto v : bindSetIndexs)
+            sets.push_back(descriptorSets[v]);
+
+        if (sets.size() == 0)
+        {
+            // std::cout << 1 << std::endl;
+            vkCmdBindDescriptorSets(
+                commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, layout, 0,
+                static_cast<uint32_t>(descriptorSets.size()), descriptorSets.empty() ? nullptr : descriptorSets.data(),
+                static_cast<uint32_t>(dynamicOffsets.size()), dynamicOffsets.empty() ? nullptr : dynamicOffsets.data());
+        }
+        else
+        {
+            vkCmdBindDescriptorSets(
+                commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, layout, 0,
+                static_cast<uint32_t>(sets.size()), sets.empty() ? nullptr : sets.data(),
+                static_cast<uint32_t>(dynamicOffsets.size()), dynamicOffsets.empty() ? nullptr : dynamicOffsets.data());
+        }
     }
 
     void pushConstants(VkCommandBuffer commandBuffer,

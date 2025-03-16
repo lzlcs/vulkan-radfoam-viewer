@@ -32,9 +32,10 @@ layout(std430, set = 0, binding = 2) readonly buffer Adjacency {
     int adjacency[];
 };
 
-layout(std430, set = 1, binding = 0) writeonly buffer RGB {
-    uint rgb[];
-};
+// layout(std430, set = 1, binding = 0) writeonly buffer RGB {
+//     uint rgb[];
+// };
+layout(set = 1, binding = 0, rgba8) uniform writeonly image2D outputImage;
 
 layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 
@@ -142,28 +143,10 @@ void main() {
             if (delta_distance <= 1e-6) continue;
 
             float t = dot((face_origin - ray_origin), face_normal) / delta_distance;
-
-            // if (t < next_t && t > curr_t + 1e-5) next_t = t, next_node_idx = node_idx;
             if (t < next_t) next_t = t, next_node_idx = node_idx;
-
-            // if (n == 20 && node_idx == 754691)
-            // {
-            //     // rgb[idx] = next_node_idx;
-            //     rgb[idx] = int(curr_t * 1000000);
-            //     return;
-            // }
-
         }
 
         if (next_node_idx == -1) break;
-
-
-        // if (n == 20)
-        // {
-        //     rgb[idx] = next_node_idx;
-        //     // rgb[idx] = int(next_t * 1000000);
-        //     return;
-        // }
 
         if (next_t > curr_t)
         {
@@ -183,25 +166,9 @@ void main() {
             if (transmittance <= transmittanceThreshold) break;
         }
 
-        // debugPrintfEXT("curr_node: %d ", curr_node_idx);
-        // if (n == maxSteps - 1)
-        // {
-        //     rgb[idx] = vec4(vertices[curr_node_idx].sh_coeffs[0],
-        //         vertices[curr_node_idx].sh_coeffs[1],
-        //         vertices[curr_node_idx].sh_coeffs[2], curr_node_idx);
-        //     rgb[idx] = vec4(vertices[curr_node_idx].color,
-        //         vertices[curr_node_idx].sh_coeffs[1],
-        //         vertices[curr_node_idx].sh_coeffs[2], curr_node_idx);
-        //     rgb[idx] = unpackUnorm4x8(vertices[curr_node_idx].color);
-        //     rgb[idx] = vec4(curr_rgb, alpha);
-        //     return;
-        // }
-
-
         curr_t = max(curr_t, next_t);
         curr_node_idx = next_node_idx;
     }
 
-    rgb[idx] = packUnorm4x8(vec4(accumulated_rgb, 1));
-    // rgb[idx] = curr_node_idx;
+    imageStore(outputImage, ivec2(x, y), vec4(accumulated_rgb, 1.0));
 }
