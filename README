@@ -4,8 +4,6 @@
 
 This project is a partial implementation of the [RadFoam](https://radfoam.github.io/) paper, featuring a real-time ray tracing renderer built with the Vulkan SDK. It supports user navigation and novel view synthesis, with a focus on familiarizing myself with Vulkan and improving rendering performance.
 
-![Demo Screenshot](demo.gif) <!-- Replace with actual screenshot/GIF path -->
-
 ---
 
 ## Key Features ✨
