@@ -11,12 +11,11 @@ struct Vertex {
     vec3 pos; 
     int padding1;
     // 4 Bytes
-    uint color;
     float density;
     int offset;
-    int padding2;
+    vec2 padding2;
 
-    float sh_coeffs[45];
+    float sh_coeffs[48];
 };
 
 

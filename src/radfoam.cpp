@@ -8,10 +8,9 @@
 struct RawVertex
 {
     float x, y, z;
-    uint8_t r, g, b;
     float density;
     uint32_t adjacency_offset;
-    float sh_coeffs[45];
+    float sh_coeffs[48];
 };
 
 #pragma pack(pop)
@@ -62,14 +61,8 @@ void RadFoam::parseVertexData(std::istream &is)
         auto &dst = vertices[i];
         dst.pos = glm::vec4(src.x, src.y, src.z, 0);
         dst.offset = src.adjacency_offset;
-        dst.color = glm::u8vec4(src.r, src.g, src.b, 255);
         dst.density = src.density;
-        // if (i == 225284) 
-        // {
-        //     std::cout << src.density << ' ' << (int)src.r << ' ' << (int)src.g << ' ' << (int)src.b << std::endl;
-        // }
-        
-        std::copy_n(src.sh_coeffs, 45, dst.sh_coeffs.begin());
+        std::copy_n(src.sh_coeffs, 48, dst.sh_coeffs.begin());
     }
 }
 
@@ -171,7 +164,7 @@ void AABBTree::buildAABBLeaves()
     std::vector<AABB> tmp(1u << numLevels);
     aabbBuffer->downloadData(tmp.data(), aabbBuffer->getSize());
 
-    // int x = 983388;
+    // int x = 10000;
     // std::cout << x << std::endl;
     // for (int i = x; i < x + 1; i++)
     // {
@@ -181,7 +174,8 @@ void AABBTree::buildAABBLeaves()
     //     // std::cout << tmp[i].max[0] << ' ';
     //     // std::cout << tmp[i].max[1] << ' ';
     //     // std::cout << tmp[i].max[2] << std::endl;
-    //     std::cout << pModel->vertices[i * 2].offset << ' ';
+    //     std::cout << pModel->vertices[i * 2].sh_coeffs[0] << ' ';
+    //     std::cout << pModel->vertices[i * 2].sh_coeffs[47] << ' ';
     //     // std::cout << pModel->vertices[i * 2].pos_offset[1] << ' ';
     //     // std::cout << pModel->vertices[i * 2].pos_offset[2] << std::endl;
     //     // std::cout << pModel->vertices[i * 2 + 1].pos_offset[0] << ' ';
